@@ -16,7 +16,54 @@ class CommentSet {
 }
 
 class Header {
+	file_title: string = "";
+	editor: string = "";
+	created: Date = new Date(Date.now());
+	edited: Date = new Date(Date.now());
+	maintained: boolean = false;
+	description: string = "";
+	valid: boolean = false;
 
+	constructor(doc: vscode.TextDocument) {
+		// Fetch the comments used
+		let set = get_comment_set(doc);
+
+		// Now loop line-by-line to try and parse the information
+		let text_to_go = doc.getText();
+		let newline_pos = text_to_go.indexOf("\n");
+		while (newline_pos !== undefined) {
+			// Fetch the current line
+			let line = text_to_go.substr(0, newline_pos - 1);
+			text_to_go = text_to_go.substr(newline_pos + 1);
+			
+			// Check if the comment is correct
+			if (line.substr(0, set.start.length) === set.start) {
+				// First line: parse the title
+				this.file_title = line.substr(set.start.length);
+			} else if (line.substr(0, set.middle.length) === set.middle) {
+				// Middle; could be anything, really
+				
+			} else if (line.substr(0, set.end.length) === set.end) {
+				// The end; valid (if made so far)
+				this.valid = true;
+				return;
+			} else {
+				// Stopped randomly; not valid
+				return;
+			}
+			
+			// Get the next newline pos
+			newline_pos = text_to_go.indexOf("\n");
+		}
+	}
+
+	private parse(line: string, set: CommentSet): boolean {
+		return true;
+	}
+
+	public write(): string {
+		return "";	
+	}
 }
 
 function get_header_title(doc: vscode.TextDocument): string {
