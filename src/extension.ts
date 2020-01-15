@@ -1,3 +1,18 @@
+/* EXTENSION.ts
+ *   by Anonymous
+ *
+ * Created:
+ *   1/15/2020, 4:29:13 PM
+ * Last edited:
+ *   1/15/2020, 4:29:16 PM
+ * Auto updated?
+ *   Yes
+ *
+ * Description:
+ *   TypeScript script for the File Header Generator extension. This is
+ *   where the magic happens, as they say.
+**/
+
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
@@ -21,7 +36,7 @@ function get_enabled(): boolean {
 	if (data === undefined) {
 		return true;
 	}
-	return false;
+	return data;
 }
 
 function get_editor(): string {
@@ -286,7 +301,7 @@ function update_header(doc: vscode.TextDocument): void {
 	// Check what we have
 	if (auto_updated === "unknown" || auto_updated === "no") {
 		// No auto update enabled
-		console.log("auto-header-updater: no auto update enabled for file: \"" + doc.uri.path + "\"");
+		console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
 		return;
 	} else if (auto_updated === "pending") {
 		vscode.window.showErrorMessage("Auto updated should have a line following with 'yes' or 'no'");
@@ -311,7 +326,7 @@ function update_header(doc: vscode.TextDocument): void {
 		});
 	});
 
-	console.log("auto-header-updater: update success for file: \"" + doc.uri.path + "\"");
+	console.log("file-header-generator: update success for file: \"" + doc.uri.path + "\"");
 }
 
 // this method is called when your extension is activated
@@ -324,6 +339,12 @@ export function activate(context: vscode.ExtensionContext) {
 		let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
 
 		context.subscriptions.push(disposable, another_disposable);
+	} else {
+		let disposable = vscode.commands.registerCommand('file-header-generator.generateHeader', () => {
+			vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
+		});
+
+		context.subscriptions.push(disposable);
 	}
 }
 

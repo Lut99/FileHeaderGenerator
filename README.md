@@ -28,3 +28,7 @@ See the release notes for each version below.
 ### 1.0.0
 
 Initial release of the extension.
+
+### 1.0.1
+
+Added Typescript and Javascript support.

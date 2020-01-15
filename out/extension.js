@@ -1,4 +1,18 @@
 "use strict";
+/* EXTENSION.ts
+ *   by Anonymous
+ *
+ * Created:
+ *   1/15/2020, 4:29:13 PM
+ * Last edited:
+ *   1/15/2020, 4:29:16 PM
+ * Auto updated?
+ *   Yes
+ *
+ * Description:
+ *   TypeScript script for the File Header Generator extension. This is
+ *   where the magic happens, as they say.
+**/
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -25,7 +39,7 @@ function get_enabled() {
     if (data === undefined) {
         return true;
     }
-    return false;
+    return data;
 }
 function get_editor() {
     let config = vscode.workspace.getConfiguration();
@@ -93,7 +107,7 @@ function get_header_title(doc) {
 function get_comment_set(doc) {
     let id = doc.languageId;
     // Use that for the comment character
-    if (id === "c" || id === "cpp" || id === "csharp" || id === "java") {
+    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript") {
         return new CommentSet("/*", " *", "**/");
     }
     else if (id === "python") {
@@ -271,7 +285,7 @@ function update_header(doc) {
     // Check what we have
     if (auto_updated === "unknown" || auto_updated === "no") {
         // No auto update enabled
-        console.log("auto-header-updater: no auto update enabled for file: \"" + doc.uri.path + "\"");
+        console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
         return;
     }
     else if (auto_updated === "pending") {
@@ -294,7 +308,7 @@ function update_header(doc) {
             can_update = true;
         });
     });
-    console.log("auto-header-updater: update success for file: \"" + doc.uri.path + "\"");
+    console.log("file-header-generator: update success for file: \"" + doc.uri.path + "\"");
 }
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
@@ -304,6 +318,12 @@ function activate(context) {
         let disposable = vscode.commands.registerCommand('file-header-generator.generateHeader', prepare_generation);
         let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
         context.subscriptions.push(disposable, another_disposable);
+    }
+    else {
+        let disposable = vscode.commands.registerCommand('file-header-generator.generateHeader', () => {
+            vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
+        });
+        context.subscriptions.push(disposable);
     }
 }
 exports.activate = activate;
