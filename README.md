@@ -1,4 +1,4 @@
-# file-header-generator README
+# File Header Generator
 
 The File Header Generator extension aims to quickly generate readable headers for several programming languages. Additionally, it also automatically updates the last edited time.
 
