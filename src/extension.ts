@@ -15,55 +15,9 @@ class CommentSet {
 	}
 }
 
-class Header {
-	file_title: string = "";
-	editor: string = "";
-	created: Date = new Date(Date.now());
-	edited: Date = new Date(Date.now());
-	maintained: boolean = false;
-	description: string = "";
-	valid: boolean = false;
-
-	constructor(doc: vscode.TextDocument) {
-		// Fetch the comments used
-		let set = get_comment_set(doc);
-
-		// Now loop line-by-line to try and parse the information
-		let text_to_go = doc.getText();
-		let newline_pos = text_to_go.indexOf("\n");
-		while (newline_pos !== undefined) {
-			// Fetch the current line
-			let line = text_to_go.substr(0, newline_pos - 1);
-			text_to_go = text_to_go.substr(newline_pos + 1);
-			
-			// Check if the comment is correct
-			if (line.substr(0, set.start.length) === set.start) {
-				// First line: parse the title
-				this.file_title = line.substr(set.start.length);
-			} else if (line.substr(0, set.middle.length) === set.middle) {
-				// Middle; could be anything, really
-				
-			} else if (line.substr(0, set.end.length) === set.end) {
-				// The end; valid (if made so far)
-				this.valid = true;
-				return;
-			} else {
-				// Stopped randomly; not valid
-				return;
-			}
-			
-			// Get the next newline pos
-			newline_pos = text_to_go.indexOf("\n");
-		}
-	}
-
-	private parse(line: string, set: CommentSet): boolean {
-		return true;
-	}
-
-	public write(): string {
-		return "";	
-	}
+function get_editor() {
+	let config = vscode.workspace.getConfiguration();
+	return config.get("auto-header-generator.username");
 }
 
 function get_header_title(doc: vscode.TextDocument): string {
@@ -156,7 +110,7 @@ function generate_header(): void {
 	
 	// Create the full comment text
 	let text = set.start + title + "\n";
-	text += set.middle + "  by Lut99\n";
+	text += set.middle + "  by " + get_editor() + "\n";
 	text += set.middle + "\n";
 	text += set.middle + "Created:\n";
 	text += set.middle + "  " + get_now() + "\n";
@@ -174,15 +128,6 @@ function generate_header(): void {
 	vscode.workspace.applyEdit(edit);
 }
 
-function perform_update(): void {
-
-}
-
-/* Returns an header object */
-function get_header(): Header {
-	return new Header();
-}
-
 /* Event listener for when a user saves a file, i.e. the header should be updated. */
 function update_header(): void {
 
@@ -196,9 +141,9 @@ export function activate(context: vscode.ExtensionContext) {
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
 	let disposable = vscode.commands.registerCommand('extension.generateHeader', generate_header);
-	let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
+	//let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
 
-	context.subscriptions.push(disposable, another_disposable);
+	context.subscriptions.push(disposable);//, another_disposable);
 }
 
 // this method is called when your extension is deactivated

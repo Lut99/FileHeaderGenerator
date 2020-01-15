@@ -10,7 +10,9 @@ class CommentSet {
         this.end = end;
     }
 }
-class Header {
+function get_editor() {
+    let config = vscode.workspace.getConfiguration();
+    return config.get("auto-header-generator.username");
 }
 function get_header_title(doc) {
     let path_raw = doc.uri.path;
@@ -95,7 +97,7 @@ function generate_header() {
     let title = get_header_title(doc);
     // Create the full comment text
     let text = set.start + title + "\n";
-    text += set.middle + "  by Lut99\n";
+    text += set.middle + "  by " + get_editor() + "\n";
     text += set.middle + "\n";
     text += set.middle + "Created:\n";
     text += set.middle + "  " + get_now() + "\n";
@@ -111,12 +113,6 @@ function generate_header() {
     edit.insert(path, new vscode.Position(0, 0), text);
     vscode.workspace.applyEdit(edit);
 }
-function perform_update() {
-}
-/* Returns an header object */
-function get_header() {
-    return new Header();
-}
 /* Event listener for when a user saves a file, i.e. the header should be updated. */
 function update_header() {
 }
@@ -127,8 +123,8 @@ function activate(context) {
     // Now provide the implementation of the command with registerCommand
     // The commandId parameter must match the command field in package.json
     let disposable = vscode.commands.registerCommand('extension.generateHeader', generate_header);
-    let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
-    context.subscriptions.push(disposable, another_disposable);
+    //let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
+    context.subscriptions.push(disposable); //, another_disposable);
 }
 exports.activate = activate;
 // this method is called when your extension is deactivated

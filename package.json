@@ -19,6 +19,18 @@
 				"command": "extension.generateHeader",
 				"title": "Generate Header"
 			}
+		],
+		"configuration":[
+			{
+				"title": "Auto Header Generator",
+				"properties": {
+					"auto-header-generator.username": {
+						"type": "string",
+						"default": "anonymous",
+						"description": "The name that will be set as editor / creator of each file"
+					}
+				}
+			}
 		]
 	},
 	"scripts": {
