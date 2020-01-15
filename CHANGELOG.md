@@ -19,3 +19,8 @@
 
 ### Fixed
 - Extension is now enabling itself according to the config, not always setting itself to disabled
+
+## [1.0.3] - 15-01-2020
+
+### Added
+- The changelog file is now maintained
