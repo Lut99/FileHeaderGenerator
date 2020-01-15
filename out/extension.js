@@ -19,9 +19,17 @@ class CommentSet {
         this.end = end;
     }
 }
+function get_enabled() {
+    let config = vscode.workspace.getConfiguration();
+    let data = config.get("file-header-generator.enabled");
+    if (data === undefined) {
+        return true;
+    }
+    return false;
+}
 function get_editor() {
     let config = vscode.workspace.getConfiguration();
-    let data = config.get("auto-header-generator.username");
+    let data = config.get("file-header-generator.username");
     if (data === undefined) {
         return "anonymous";
     }
@@ -29,7 +37,7 @@ function get_editor() {
 }
 function get_n_lines() {
     let config = vscode.workspace.getConfiguration();
-    let data = config.get("auto-header-generator.searchLines");
+    let data = config.get("file-header-generator.searchLines");
     if (data === undefined) {
         return 20;
     }
@@ -291,12 +299,12 @@ function update_header(doc) {
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 function activate(context) {
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with registerCommand
-    // The commandId parameter must match the command field in package.json
-    let disposable = vscode.commands.registerCommand('extension.generateHeader', prepare_generation);
-    let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
-    context.subscriptions.push(disposable, another_disposable);
+    // Only add things if the extension is enabled
+    if (get_enabled()) {
+        let disposable = vscode.commands.registerCommand('file-header-generator.generateHeader', prepare_generation);
+        let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
+        context.subscriptions.push(disposable, another_disposable);
+    }
 }
 exports.activate = activate;
 // this method is called when your extension is deactivated

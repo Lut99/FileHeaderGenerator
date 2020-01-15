@@ -1,6 +1,6 @@
 {
-	"name": "auto-comment-header",
-	"displayName": "Auto Comment Header",
+	"name": "file-header-generator",
+	"displayName": "File Header Generator",
 	"description": "Automatically creates (and maintains) file headers for multiple languages.",
 	"version": "0.0.1",
 	"engines": {
@@ -16,23 +16,28 @@
 	"contributes": {
 		"commands": [
 			{
-				"command": "extension.generateHeader",
+				"command": "file-header-generator.generateHeader",
 				"title": "Generate Header"
 			}
 		],
 		"configuration":[
 			{
-				"title": "Auto Header Generator",
+				"title": "File Header Generator",
 				"properties": {
-					"auto-header-generator.username": {
-						"type": "string",
-						"default": "anonymous",
-						"description": "The name that will be set as creator of a file."
+					"file-header-generator.enabled": {
+						"type": "boolean",
+						"default": true,
+						"description": "Enables or disables this extension."
 					},
-					"auto-header-generator.searchLines": {
+					"file-header-generator.username": {
+						"type": "string",
+						"default": "Anonymous",
+						"description": "Set your own name to sign the headers generated with this extension."
+					},
+					"file-header-generator.searchLines": {
 						"type": "number",
 						"default": 20,
-						"description": "Maximum number of lines to search for the desired data, such as the created date and if the header should be updated."
+						"description": "Number of lines to search for the Auto Updated and Last Edited fields. More lines means more extensive search on non-updated files, but more lines allows for more complicated headers before the fields can appear."
 					}
 				}
 			}
