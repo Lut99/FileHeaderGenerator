@@ -6,7 +6,7 @@ The File Header Generator extension aims to quickly generate readable headers fo
 
 The File Header Generator generates headers in one, pre-determined lay-out. This layout displays a more readable type of file name, the creator of the file, when the file was created and when the file was edited most recently. Additionally, it also shows a description (see the picture below for an example).
 
-\!\[Example Header\]\(images/header_example.png\)
+![Example Header](images/header_example.png)
 
 The creation of a new header is really easy. Simply run the command: "Generate Header" from the command palette, type a discription for your file and hit enter. This description can, of course, also be added later on by editing the header manually. From now on, the header is automatically updated each time you save the file to display the most recent edit time. If you want to disable this, just set the 'Auto Updated?' value to 'no' or remove it altogether.
 
