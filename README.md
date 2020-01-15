@@ -8,7 +8,9 @@ The File Header Generator generates headers in one, pre-determined lay-out. This
 
 ![Example Header](images/header_example.png)
 
-The creation of a new header is really easy. Simply run the command: "Generate Header" from the command palette, type a discription for your file and hit enter. This description can, of course, also be added later on by editing the header manually. From now on, the header is automatically updated each time you save the file to display the most recent edit time. If you want to disable this, just set the 'Auto Updated?' value to 'no' or remove it altogether.
+The creation of a new header is really easy. Simply run the command: "Generate Header" from the command palette, type a discription for your file and hit enter. This description can, of course, also be added later on by editing the header manually. Note that when adding the header via the input box, it is automatically hard-wrapped to a total of 79 characters per line.
+
+When the header is generated, it is automatically maintained (i.e., the 'Last Edited' date is updated) every time the file is saved. To stop this behaviour, set 'auto-update' to no or remove it altogether.
 
 ## Extension Settings
 
