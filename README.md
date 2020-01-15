@@ -32,3 +32,7 @@ Initial release of the extension.
 ### 1.0.1
 
 Added Typescript and Javascript support.
+
+### 1.0.2
+
+Extension was now disabled whatever the setting was. Also added notification for when Generate Header is run but the extension isn't enabled.
