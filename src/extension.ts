@@ -97,7 +97,7 @@ function get_header_title(doc: vscode.TextDocument): string {
 function get_comment_set(doc: vscode.TextDocument): CommentSet {
 	let id = doc.languageId;
 	// Use that for the comment character
-	if (id === "c" || id === "cpp" || id === "csharp" || id === "java") {
+	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript") {
 		return new CommentSet("/*", " *", "**/");
 	} else if (id === "python") {
 		return new CommentSet("#", "#", "#");
