@@ -10,7 +10,7 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:extension.generateHeader"
+		"*"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -28,6 +28,11 @@
 						"type": "string",
 						"default": "anonymous",
 						"description": "The name that will be set as editor / creator of each file"
+					},
+					"auto-header-generator.searchLines": {
+						"type": "number",
+						"default": 20,
+						"description": "Maximum number of lines to search for the desired data, such as the created date and if the header should be updated."
 					}
 				}
 			}
