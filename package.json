@@ -27,7 +27,7 @@
 					"auto-header-generator.username": {
 						"type": "string",
 						"default": "anonymous",
-						"description": "The name that will be set as editor / creator of each file"
+						"description": "The name that will be set as creator of a file."
 					},
 					"auto-header-generator.searchLines": {
 						"type": "number",
