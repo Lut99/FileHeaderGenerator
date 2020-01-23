@@ -24,3 +24,13 @@
 
 ### Added
 - The changelog file is now maintained
+
+## [1.0.4] - 23-01-2020
+
+### Added
+- Now support for CUDA files
+
+## [1.0.5] - 23-01-2020
+
+### Added
+- Updated the changelog and README to include version 1.0.4 and 1.0.5.
