@@ -4,7 +4,7 @@
  * Created:
  *   1/15/2020, 4:29:13 PM
  * Last edited:
- *   1/15/2020, 4:35:21 PM
+ *   1/23/2020, 3:14:17 PM
  * Auto updated?
  *   Yes
  *
@@ -112,7 +112,7 @@ function get_header_title(doc: vscode.TextDocument): string {
 function get_comment_set(doc: vscode.TextDocument): CommentSet {
 	let id = doc.languageId;
 	// Use that for the comment character
-	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript") {
+	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda") {
 		return new CommentSet("/*", " *", "**/");
 	} else if (id === "python") {
 		return new CommentSet("#", "#", "#");
