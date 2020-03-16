@@ -5,7 +5,7 @@
  * Created:
  *   1/15/2020, 4:29:13 PM
  * Last edited:
- *   1/23/2020, 3:14:17 PM
+ *   3/16/2020, 2:25:13 PM
  * Auto updated?
  *   Yes
  *
@@ -107,7 +107,7 @@ function get_header_title(doc) {
 function get_comment_set(doc) {
     let id = doc.languageId;
     // Use that for the comment character
-    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda") {
+    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php") {
         return new CommentSet("/*", " *", "**/");
     }
     else if (id === "python") {
@@ -115,6 +115,9 @@ function get_comment_set(doc) {
     }
     else if (id === "lua") {
         return new CommentSet("--[[", "    ", "--]]");
+    }
+    else if (id === "html") {
+        return new CommentSet("<!--", "    ", "-->");
     }
     else {
         return new CommentSet("", "", "");
@@ -195,7 +198,7 @@ function prepare_generation() {
         }
         // Query the user about a description
         let description = yield vscode.window.showInputBox({
-            placeHolder: "e.g., Python Class that describes a dog...",
+            placeHolder: "e.g., This file contains the Dog class that does...",
             prompt: "File description"
         });
         if (description === undefined) {
