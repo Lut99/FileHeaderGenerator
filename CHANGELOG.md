@@ -28,9 +28,19 @@
 ## [1.0.4] - 23-01-2020
 
 ### Added
-- Now support for CUDA files
+- CUDA (.cu) support
 
 ## [1.0.5] - 23-01-2020
 
 ### Added
 - Updated the changelog and README to include version 1.0.4 and 1.0.5.
+
+## [1.0.6] - 16-03-2020
+
+### Added
+- HTML support
+- CSS support
+- PHP support
+
+### Changes
+- Altered placeholder for file description to be a little more accurate

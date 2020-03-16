@@ -40,3 +40,7 @@ Extension was now disabled whatever the setting was. Also added notification for
 ### 1.0.4
 
 Added CUDA files support.
+
+### 1.0.6
+
+Added support for HTML, CSS and PHP languages.
