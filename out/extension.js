@@ -5,7 +5,7 @@
  * Created:
  *   1/15/2020, 4:29:13 PM
  * Last edited:
-<<<<<<< HEAD
+ *   01/05/2021, 12:27:17
  *   3/16/2020, 2:25:13 PM
 =======
  *   16/03/2020, 14:11:11
@@ -111,10 +111,10 @@ function get_header_title(doc) {
 function get_comment_set(doc) {
     let id = doc.languageId;
     // Use that for the comment character
-    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php") {
+    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl") {
         return new CommentSet("/*", " *", "**/");
     }
-    else if (id === "python") {
+    else if (id === "python" || id === "shellscript" || id === "makefile" || id === "cmake") {
         return new CommentSet("#", "#", "#");
     }
     else if (id === "lua") {

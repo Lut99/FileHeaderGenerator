@@ -44,3 +44,14 @@
 
 ### Changes
 - Altered placeholder for file description to be a little more accurate
+
+## [1.0.7] - 01-05-2021
+
+### Added
+ - Shellscript support
+ - Makefile support
+ - CMake support
+ - GLSL support
+
+### Fixed
+ - A few vulnerabilities in dependencies, by upgrading to newer dependencies.

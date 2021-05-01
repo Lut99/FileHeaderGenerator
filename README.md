@@ -44,3 +44,7 @@ Added CUDA files support.
 ### 1.0.6
 
 Added support for HTML, CSS and PHP languages.
+
+### 1.0.7
+
+Fixed a few vulnerabilities and added support for shellscript (bash etc), Makefile, Cmake and GLSL files.
