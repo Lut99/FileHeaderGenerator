@@ -2,7 +2,7 @@
 	"name": "file-header-generator",
 	"displayName": "File Header Generator",
 	"description": "Automatically creates (and maintains) file headers for multiple languages.",
-	"version": "1.0.7",
+	"version": "1.1.0",
 	"publisher": "Lut99",
 	"repository": {
 		"type": "git",
@@ -23,6 +23,14 @@
 			{
 				"command": "file-header-generator.generateHeader",
 				"title": "Generate Header"
+			},
+			{
+				"command": "file-header-generator.updateDateFormat",
+				"title": "Update Date Format"
+			},
+			{
+				"command": "file-header-generator.updateDateFormats",
+				"title": "Update Date Formats (All Files)"
 			}
 		],
 		"configuration": [
@@ -41,8 +49,13 @@
 					},
 					"file-header-generator.searchLines": {
 						"type": "number",
-						"default": 20,
-						"description": "Number of lines to search for the Auto Updated and Last Edited fields. More lines means more extensive search on non-updated files, but more lines allows for more complicated headers before the fields can appear."
+						"default": 15,
+						"description": "Number of lines to search for the 'Auto updated?' and 'Last edited:' fields. The larger the number, the more you can write before the fields can appear; however, it also increases search cost for files that are not auto updated."
+					},
+					"file-header-generator.dateFormat": {
+						"type": "string",
+						"default": "DD MMM YYYY HH:mm:ss",
+						"description": "The format of dates written by the FileHeaderGenerator. Is set to the current locale's format by default (given as '<system>'). For an overview of the tokens available, refer to https://moment.github.io/luxon/#/formatting?id=table-of-tokens."
 					}
 				}
 			}

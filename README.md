@@ -2,6 +2,7 @@
 
 The File Header Generator extension aims to quickly generate readable headers for several programming languages. Additionally, it also automatically updates the last edited time.
 
+
 ## Features
 
 The File Header Generator generates headers in one, pre-determined lay-out. This layout displays a more readable type of file name, the creator of the file, when the file was created and when the file was edited most recently. Additionally, it also shows a description (see the picture below for an example).
@@ -12,6 +13,16 @@ The creation of a new header is really easy. Simply run the command: "Generate H
 
 When the header is generated, it is automatically maintained (i.e., the 'Last Edited' date is updated) every time the file is saved. To stop this behaviour, set 'Auto updated?' to no or remove it altogether.
 
+
+## Commands
+
+The File Header Generator extension current contributes the following two commands:
+
+* `file-header-generator.generateHeader`: Generates a header in the current file. Once run, it first prompts the user to input a description, which will automatically be linewrapped in the resulting header. The header will be placed at the start of the file, before any text already present.
+* `file-header-generator.updateDateFormat`: Updates the date format in the current file to the one used by the File Header Generator (see the `file-header-generator.dateFormat` setting). It first prompts the user for the old format, and then tries to update the date. It informs whether it was succesful or not.
+* `file-header-generator.updateDateFormats`: Updates the date format in a similar way as `file-header-generator.updateDateFormat`, except that it does so for every file in the current workspace. Reports how many files were updated.
+
+
 ## Extension Settings
 
 This extension contributes the following settings:
@@ -19,6 +30,7 @@ This extension contributes the following settings:
 * `file-header-generator.enabled`: Enables or disables this extension.
 * `file-header-generator.username`: Set your own name to sign the headers generated with this extension.
 * `file-header-generator.searchLines`: Number of lines to search for the Auto Updated and Last Edited fields. More lines means more extensive search on non-updated files, but more lines allows for more complicated headers before the fields can appear.
+* `file-header-generator.dateFormat`: The format of dates written by the FileHeaderGenerator. Is set to the current locale's format by default (given as `<system>`). For an overview of the tokens available, refer to [https://moment.github.io/luxon/#/formatting?id=table-of-tokens](https://moment.github.io/luxon/#/formatting?id=table-of-tokens.).
 
 
 ## Release Notes
@@ -48,3 +60,7 @@ Added support for HTML, CSS and PHP languages.
 ### 1.0.7
 
 Fixed a few vulnerabilities and added support for shellscript (bash etc), Makefile, Cmake and GLSL files.
+
+### 1.1.0
+
+Changed the date formatting from local to custom, and added an option to quickly update all FileHeaderGenerator's dates in a file to the new format. Also added support for Rust files.

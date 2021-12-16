@@ -1,15 +1,11 @@
 "use strict";
 /* EXTENSION.ts
- *   by Anonymous
+ *   by Lut99
  *
  * Created:
  *   1/15/2020, 4:29:13 PM
  * Last edited:
- *   01/05/2021, 12:27:17
- *   3/16/2020, 2:25:13 PM
-=======
- *   16/03/2020, 14:11:11
->>>>>>> 36a627851650f67142d6e1a6b0f8bd83c65ced73
+ *   16/12/2021, 18:20:07
  * Auto updated?
  *   Yes
  *
@@ -30,6 +26,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 const vscode = require("vscode");
+// Also import moment for date formatting
+const luxon_1 = require("luxon");
+/***** HELPER CLASSES *****/
+/* The CommentSet class, which is used to determine which comment characters are applicable for the target language. */
 class CommentSet {
     constructor(start, middle, end) {
         this.start = start;
@@ -37,6 +37,8 @@ class CommentSet {
         this.end = end;
     }
 }
+/***** CONFIGURATION SETTINGS *****/
+/* Function that returns the enabled setting value from VSCode's settings. */
 function get_enabled() {
     let config = vscode.workspace.getConfiguration();
     let data = config.get("file-header-generator.enabled");
@@ -45,6 +47,7 @@ function get_enabled() {
     }
     return data;
 }
+/* Function that returns the editor's name from VSCode's settings. */
 function get_editor() {
     let config = vscode.workspace.getConfiguration();
     let data = config.get("file-header-generator.username");
@@ -53,14 +56,27 @@ function get_editor() {
     }
     return data;
 }
+/* Function that returns the number of lines to search from VSCode's settings. */
 function get_n_lines() {
     let config = vscode.workspace.getConfiguration();
     let data = config.get("file-header-generator.searchLines");
     if (data === undefined) {
-        return 20;
+        return 15;
     }
     return data;
 }
+/* Function that returns the date format string from VSCode's settings. */
+function get_date_format() {
+    let config = vscode.workspace.getConfiguration();
+    let data = config.get("file-header-generator.dateFormat");
+    if (data === undefined) {
+        return "<system>";
+    }
+    return data;
+}
+/***** HELPER FUNCTIONS *****/
+/* Given the document, returns its name in a more name-y format.
+ * This format is basically the name of the file capitalized without extensions, and with spaces on underscores or capitalization changes. */
 function get_header_title(doc) {
     let path_raw = doc.uri.path;
     let slash_pos = path_raw.lastIndexOf("/");
@@ -70,7 +86,7 @@ function get_header_title(doc) {
         name = path_raw;
     }
     else {
-        name = path_raw.substr(slash_pos + 1);
+        name = path_raw.substring(slash_pos + 1);
     }
     // Change the file name (excl. extension) to capital letters. However, if the name has camelcase letters, split the name by space. Replaces '_' or '-' also with a space.
     let extension_pos = name.lastIndexOf(".");
@@ -104,33 +120,50 @@ function get_header_title(doc) {
     }
     // Add the extension as-is
     if (extension_pos !== name.length) {
-        result += name.substr(extension_pos);
+        result += name.substring(extension_pos);
     }
     return result;
 }
+/* Given the document, returns the appropriate CommentSet instance with the comments used for the document's defined language. */
 function get_comment_set(doc) {
     let id = doc.languageId;
     // Use that for the comment character
-    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl") {
+    if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl" || id === "rust") {
+        console.log("file-header-generator: using C-style comments");
         return new CommentSet("/*", " *", "**/");
     }
     else if (id === "python" || id === "shellscript" || id === "makefile" || id === "cmake") {
+        console.log("file-header-generator: using script-style comments");
         return new CommentSet("#", "#", "#");
     }
     else if (id === "lua") {
+        console.log("file-header-generator: using Lua comments");
         return new CommentSet("--[[", "    ", "--]]");
     }
     else if (id === "html") {
+        console.log("file-header-generator: using HTML comments");
         return new CommentSet("<!--", "    ", "-->");
     }
     else {
+        console.log("file-header-generator: unknown language, so using no comments");
         return new CommentSet("", "", "");
     }
 }
-function get_now() {
-    let now = new Date(Date.now());
-    return now.toLocaleString();
+/* Converts the given datetime to the given format. */
+function date_to_format(date, formatString) {
+    if (formatString === "<system>") {
+        return date.toLocaleString(luxon_1.DateTime.DATETIME_FULL_WITH_SECONDS);
+    }
+    else {
+        return date.toFormat(formatString);
+    }
 }
+/* Returns the current time in the given date/time format. */
+function get_now(formatString) {
+    let now = luxon_1.DateTime.now();
+    return date_to_format(now, formatString);
+}
+/* Given a lengthy description, wraps it in lines of at most line_length character long. The line_start is the bit of text that should be printed in front of each line (usually the middle comment tag). */
 function wrap_description(description, line_start, line_length = 79) {
     let description_words = description.split(" ");
     let wrapped_description = "";
@@ -149,7 +182,7 @@ function wrap_description(description, line_start, line_length = 79) {
         // Check if the word itself will be able to fit. If not, then split the
         //   word in two and add it to the list as first words
         if (word.length > functional_length) {
-            description_words = [word.substr(0, functional_length), word.substr(functional_length)].concat(description_words);
+            description_words = [word.substring(0, functional_length), word.substring(functional_length)].concat(description_words);
         }
         else {
             // If everything got through correctly, add the current word to the line
@@ -163,34 +196,112 @@ function wrap_description(description, line_start, line_length = 79) {
     wrapped_description += line + "\n";
     return wrapped_description;
 }
-function generate_header(doc, description) {
-    // Determine the path of the currently opened document
-    let path = doc.uri;
-    // Fetch the correct comment characters
-    let set = get_comment_set(doc);
-    // Fetch the filename (with extension)
-    let title = get_header_title(doc);
-    // Wrap the description if necessary
-    let description_wrapped = wrap_description(description, set.middle + "   ");
-    // Create the full comment text
-    let text = set.start + " " + title + "\n";
-    text += set.middle + "   by " + get_editor() + "\n";
-    text += set.middle + "\n";
-    text += set.middle + " Created:\n";
-    text += set.middle + "   " + get_now() + "\n";
-    text += set.middle + " Last edited:\n";
-    text += set.middle + "   " + get_now() + "\n";
-    text += set.middle + " Auto updated?\n";
-    text += set.middle + "   Yes\n";
-    text += set.middle + "\n";
-    text += set.middle + " Description:\n";
-    text += description_wrapped;
-    text += set.end + "\n\n";
-    // Create an edit
-    let edit = new vscode.WorkspaceEdit();
-    edit.insert(path, new vscode.Position(0, 0), text);
-    vscode.workspace.applyEdit(edit);
+/* Returns the first line from a long block of multiple lines. Looks for classic newlines ("\n") as delimiters. */
+function get_line(text) {
+    let to_return = "";
+    for (var i = 0; i < text.length; i++) {
+        if (text[i] === "\n") {
+            // Done, return the line
+            return to_return;
+        }
+        to_return += text[i];
+    }
+    // No newline was found, return the remaining text unless no text was found at all
+    if (to_return === "") {
+        return undefined;
+    }
+    return to_return;
 }
+/* Returns the same string, except with all spaces stripped in front and at the back of the string. */
+function strip_spaces(text) {
+    // First, skip all start spaces
+    let start_i = 0;
+    for (; start_i < text.length; start_i++) {
+        if (text[start_i] !== " ") {
+            break;
+        }
+    }
+    // Skip the end spaces
+    let end_i = text.length - 1;
+    for (; end_i >= 0; end_i--) {
+        if (text[end_i] !== " ") {
+            break;
+        }
+    }
+    // If the end_i is before the start_i, return an empty string (only happens with only spaces)
+    if (start_i > end_i) {
+        return "";
+    }
+    // Otherwise, return the appropriate substing
+    return text.substring(start_i, end_i + 1);
+}
+/* Returns whether or not the given file is auto-updated or not. If so, then also returns the position and length of the values of the created date and the last-edited date. */
+function read_file_header(doc, set, max_lines_to_search) {
+    // Simply search the first N lines for the line: set.middle + " Auto updated?"
+    // But while at it, also save position of lines: set.middle + " Created:" and set.middle + " Last edited:"
+    let doc_text = doc.getText();
+    let auto_updated = "unknown";
+    let created_line = -1;
+    let created_start = -1;
+    let created_end = -1;
+    let last_edited_line = -1;
+    let last_edited_start = -1;
+    let last_edited_end = -1;
+    for (let l = 0; l < max_lines_to_search; l++) {
+        let raw_line = get_line(doc_text);
+        if (raw_line === undefined) {
+            break;
+        }
+        doc_text = doc_text.substring(raw_line.length + 1);
+        // Check if it starts with the middle char and remove it if so
+        if (raw_line.substring(0, set.middle.length) !== set.middle) {
+            continue;
+        }
+        let line = raw_line.substring(set.middle.length);
+        // Then, remove all spaces
+        line = strip_spaces(line);
+        // Check if it's one of the lines we want
+        if (auto_updated === "pending") {
+            let lower_line = line.toLowerCase();
+            if (lower_line === "yes" || lower_line === "no") {
+                auto_updated = lower_line;
+            }
+            else {
+                break;
+            }
+        }
+        else if (created_line === l) {
+            // Store the start and end of the relevant line part
+            created_start = set.middle.length + 3;
+            created_end = raw_line.length;
+        }
+        else if (last_edited_line === l) {
+            // Store the start and end of the relevant line part
+            last_edited_start = set.middle.length + 3;
+            last_edited_end = raw_line.length;
+        }
+        else if (line === "Auto updated?") {
+            auto_updated = "pending";
+        }
+        else if (line === "Created:") {
+            // The values can be found at the next line
+            created_line = l + 1;
+        }
+        else if (line === "Last edited:") {
+            // The values can be found at the next line
+            last_edited_line = l + 1;
+        }
+    }
+    // If the auto-update is still pending, then tell the user they're missing a bit
+    if (auto_updated === "pending") {
+        vscode.window.showErrorMessage("Unknown auto-update option in header; should be 'yes' or 'no'");
+        return [false, -1, -1, -1, -1, -1, -1];
+    }
+    // Return what we have
+    return [auto_updated === "yes", created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end];
+}
+/***** COMMAND FUNCTIONS *****/
+/* Prepares generating a header by quering the user for a description. */
 function prepare_generation() {
     var _a;
     return __awaiter(this, void 0, void 0, function* () {
@@ -215,30 +326,266 @@ function prepare_generation() {
         generate_header(doc, description);
     });
 }
-function get_line(text) {
-    let to_return = "";
-    for (var i = 0; i < text.length; i++) {
-        if (text[i] === "\n") {
-            // Done, return the line
-            return to_return;
-        }
-        to_return += text[i];
-    }
-    // No newline was found, return the remaining text unless no text was found at all
-    if (to_return === "") {
-        return undefined;
-    }
-    return to_return;
+/* Given a document and its description, generates a new header at the start of this document with the FileHeaderGenerator's current settings. */
+function generate_header(doc, description) {
+    // First, get the formatString property
+    let date_format = get_date_format();
+    // Determine the path of the currently opened document
+    let path = doc.uri;
+    // Fetch the correct comment characters
+    let set = get_comment_set(doc);
+    // Fetch the filename (with extension)
+    let title = get_header_title(doc);
+    // Wrap the description if necessary
+    let description_wrapped = wrap_description(description, set.middle + "   ");
+    // Create the full comment text
+    let text = set.start + " " + title + "\n";
+    text += set.middle + "   by " + get_editor() + "\n";
+    text += set.middle + "\n";
+    text += set.middle + " Created:\n";
+    text += set.middle + "   " + get_now(date_format) + "\n";
+    text += set.middle + " Last edited:\n";
+    text += set.middle + "   " + get_now(date_format) + "\n";
+    text += set.middle + " Auto updated?\n";
+    text += set.middle + "   Yes\n";
+    text += set.middle + "\n";
+    text += set.middle + " Description:\n";
+    text += description_wrapped;
+    text += set.end + "\n\n";
+    // Create an edit
+    let edit = new vscode.WorkspaceEdit();
+    edit.insert(path, new vscode.Position(0, 0), text);
+    vscode.workspace.applyEdit(edit);
 }
-function remove_spaces(text) {
-    let to_return = "";
-    for (let i = 0; i < text.length; i++) {
-        if (text[i] !== " ") {
-            to_return += text[i];
+/* Prepares updating the formats in this file by quering the user for the old format. */
+function prepare_update() {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        // Fetch the currently opened document
+        let doc = (_a = vscode.window.activeTextEditor) === null || _a === void 0 ? void 0 : _a.document;
+        if (doc === undefined) {
+            vscode.window.showErrorMessage("No open file");
+            return;
+        }
+        // Get the new format
+        let new_format = get_date_format();
+        // Query the user about a description
+        let old_format = yield vscode.window.showInputBox({
+            placeHolder: "e.g., dd MMM yyyy, HH:mm:ss",
+            prompt: "Date format of old entries (see the extension README)"
+        });
+        if (old_format === undefined) {
+            return;
+        }
+        else if (old_format === "") {
+            vscode.window.showInformationMessage("You need to provide an old format to be able to transfer the times to the new format.");
+            return;
+        }
+        // Stop if the formats are the same
+        if (old_format == new_format) {
+            vscode.window.showInformationMessage("Old format is the same as new format; nothing to do.");
+            return;
+        }
+        // Do the actual generation
+        update_date_format(doc, old_format, new_format);
+    });
+}
+/* Given a document, an old format and a new format, tries to update the created and last-updated times in that files to the new format. */
+function update_date_format(doc, old_format, new_format) {
+    // Fetch the comment set
+    let set = get_comment_set(doc);
+    // Fetch the maximum number of lines we'll search
+    let N = get_n_lines();
+    // Get the header info
+    let [auto_updated, created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end] = read_file_header(doc, set, N);
+    // Check what we have
+    if (!auto_updated) {
+        // No auto update enabled
+        console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
+        return;
+    }
+    // If auto updateing but no last_edited found
+    if (created_line === -1 || created_start === -1 || created_end === -1) {
+        console.log("file-header-generator: we want to auto update, but no 'created' header found: this should not happen!");
+        vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
+        return;
+    }
+    if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
+        console.log("file-header-generator: we want to auto update, but no 'last updated' header found: this should not happen!");
+        vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
+        return;
+    }
+    // Now that that's correct, try to fetch the created date using the format
+    let raw_created_date = doc.getText(new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)));
+    let created_date = luxon_1.DateTime.fromFormat(raw_created_date, old_format);
+    if (!created_date.isValid) {
+        if (created_date.invalidReason === "unparsable") {
+            vscode.window.showWarningMessage("Cannot parse created date '" + raw_created_date + "'; do you have the correct format?");
+        }
+        else {
+            vscode.window.showWarningMessage("Created date '" + raw_created_date + "' is not a valid date: " + created_date.invalidReason);
         }
     }
-    return to_return;
+    // Also do the edited date
+    let raw_last_edited_date = doc.getText(new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)));
+    console.log("Raw last edited: '" + raw_last_edited_date + "'");
+    let last_edited_date = luxon_1.DateTime.fromFormat(raw_last_edited_date, old_format);
+    if (!last_edited_date.isValid) {
+        if (last_edited_date.invalidReason === "unparsable") {
+            vscode.window.showWarningMessage("Cannot parse last edited date '" + raw_last_edited_date + "'; do you have the correct format?");
+        }
+        else {
+            vscode.window.showWarningMessage("Last edited date '" + raw_last_edited_date + "' is not a valid date: " + last_edited_date.invalidReason);
+        }
+    }
+    // Prepare editing
+    let edit = new vscode.WorkspaceEdit();
+    let what_did_we_do = "";
+    if (created_date.isValid) {
+        // Prepare the edit
+        edit.replace(doc.uri, new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)), date_to_format(created_date, new_format));
+        what_did_we_do = "created date";
+    }
+    if (last_edited_date.isValid) {
+        // Prepare the replace
+        edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)), date_to_format(last_edited_date, new_format));
+        if (what_did_we_do.length == 0) {
+            what_did_we_do = "last edited date";
+        }
+        else {
+            what_did_we_do += " and last edited date";
+        }
+    }
+    // Resolve the update asynchronously
+    if (created_date.isValid || last_edited_date.isValid) {
+        let edit_resolve = vscode.workspace.applyEdit(edit);
+        edit_resolve.then(() => {
+            // Show we made it!
+            vscode.window.showInformationMessage("Updated " + what_did_we_do + " to new format.");
+        });
+    }
 }
+/* Prepares updating the formats in all workspace files by quering the user for the old format. */
+function prepare_updates() {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Get the new format
+        let new_format = get_date_format();
+        // If there is no workspace folders, stop
+        if (vscode.workspace.workspaceFolders === undefined) {
+            vscode.window.showInformationMessage("No workspaces openened; nothing to do.");
+            return;
+        }
+        // First, select the workspace to open
+        let selected_workspace = yield vscode.window.showWorkspaceFolderPick();
+        if (selected_workspace === undefined) {
+            return;
+        }
+        // Search that workspace for files
+        let relative_glob = new vscode.RelativePattern(selected_workspace, "**/*");
+        let docs_job = vscode.workspace.findFiles(relative_glob);
+        let docs = yield docs_job;
+        // If there are none, let the user know
+        if (docs.length === 0) {
+            vscode.window.showInformationMessage("No documents in workspace; nothing to do.");
+            return;
+        }
+        // Query the user about a description
+        let old_format = yield vscode.window.showInputBox({
+            placeHolder: "e.g., dd MMM yyyy, HH:mm:ss",
+            prompt: "Date format of old entries (see the extension README)"
+        });
+        if (old_format === undefined) {
+            return;
+        }
+        else if (old_format === "") {
+            vscode.window.showInformationMessage("You need to provide an old format to be able to transfer the times to the new format.");
+            return;
+        }
+        // Stop if the formats are the same
+        if (old_format == new_format) {
+            vscode.window.showInformationMessage("Old format is the same as new format; nothing to do.");
+            return;
+        }
+        // Do the actual generation
+        update_date_formats(docs, old_format, new_format);
+    });
+}
+/* Given a list of resources, an old format and a new format, tries to replace the dates in the old format with the new one. */
+function update_date_formats(docs, old_format, new_format) {
+    // Fetch the comment set
+    let set = get_comment_set(doc);
+    // Fetch the maximum number of lines we'll search
+    let N = get_n_lines();
+    // Get the header info
+    let [auto_updated, created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end] = read_file_header(doc, set, N);
+    // Check what we have
+    if (!auto_updated) {
+        // No auto update enabled
+        console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
+        return;
+    }
+    // If auto updateing but no last_edited found
+    if (created_line === -1 || created_start === -1 || created_end === -1) {
+        console.log("file-header-generator: we want to auto update, but no 'created' header found: this should not happen!");
+        vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
+        return;
+    }
+    if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
+        console.log("file-header-generator: we want to auto update, but no 'last updated' header found: this should not happen!");
+        vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
+        return;
+    }
+    // Now that that's correct, try to fetch the created date using the format
+    let raw_created_date = doc.getText(new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)));
+    let created_date = luxon_1.DateTime.fromFormat(raw_created_date, old_format);
+    if (!created_date.isValid) {
+        if (created_date.invalidReason === "unparsable") {
+            vscode.window.showWarningMessage("Cannot parse created date '" + raw_created_date + "'; do you have the correct format?");
+        }
+        else {
+            vscode.window.showWarningMessage("Created date '" + raw_created_date + "' is not a valid date: " + created_date.invalidReason);
+        }
+    }
+    // Also do the edited date
+    let raw_last_edited_date = doc.getText(new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)));
+    console.log("Raw last edited: '" + raw_last_edited_date + "'");
+    let last_edited_date = luxon_1.DateTime.fromFormat(raw_last_edited_date, old_format);
+    if (!last_edited_date.isValid) {
+        if (last_edited_date.invalidReason === "unparsable") {
+            vscode.window.showWarningMessage("Cannot parse last edited date '" + raw_last_edited_date + "'; do you have the correct format?");
+        }
+        else {
+            vscode.window.showWarningMessage("Last edited date '" + raw_last_edited_date + "' is not a valid date: " + last_edited_date.invalidReason);
+        }
+    }
+    // Prepare editing
+    let edit = new vscode.WorkspaceEdit();
+    let what_did_we_do = "";
+    if (created_date.isValid) {
+        // Prepare the edit
+        edit.replace(doc.uri, new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)), date_to_format(created_date, new_format));
+        what_did_we_do = "created date";
+    }
+    if (last_edited_date.isValid) {
+        // Prepare the replace
+        edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)), date_to_format(last_edited_date, new_format));
+        if (what_did_we_do.length == 0) {
+            what_did_we_do = "last edited date";
+        }
+        else {
+            what_did_we_do += " and last edited date";
+        }
+    }
+    // Resolve the update asynchronously
+    if (created_date.isValid || last_edited_date.isValid) {
+        let edit_resolve = vscode.workspace.applyEdit(edit);
+        edit_resolve.then(() => {
+            // Show we made it!
+            vscode.window.showInformationMessage("Updated " + what_did_we_do + " to new format.");
+        });
+    }
+}
+/***** EVENTS *****/
 /* Event listener for when a user saves a file, i.e. the header should be updated. */
 var can_update = true;
 function update_header(doc) {
@@ -249,64 +596,25 @@ function update_header(doc) {
     let set = get_comment_set(doc);
     // Fetch the maximum number of lines we'll search
     let N = get_n_lines();
-    // Simply search the first N lines for the line: set.middle + " Auto updated?"
-    // But while at it, also save position of line: set.middle + " Last edited:"
-    let text_to_search = doc.getText();
-    let auto_updated = "unknown";
-    let last_edited_pos = -1;
-    let last_edited_length;
-    for (let i = 0; i < N; i++) {
-        let raw_line = get_line(text_to_search);
-        if (raw_line === undefined) {
-            break;
-        }
-        text_to_search = text_to_search.substr(raw_line.length + 1);
-        // Check if it starts with the middle char and remove it if so
-        if (raw_line.substr(0, set.middle.length) !== set.middle) {
-            continue;
-        }
-        let line = raw_line.substr(set.middle.length);
-        // Then, remove all spaces
-        line = remove_spaces(line);
-        // Check if it's one of the lines we want
-        if (auto_updated === "pending") {
-            let lower_line = line.toLowerCase();
-            if (lower_line === "yes" || lower_line === "no") {
-                auto_updated = lower_line;
-            }
-            else {
-                vscode.window.showErrorMessage("Unknown auto-update option in header; should be 'yes' or 'no'");
-                return;
-            }
-        }
-        else if (last_edited_pos !== -1 && last_edited_length === undefined) {
-            last_edited_length = raw_line.length;
-        }
-        else if (line === "Autoupdated?") {
-            auto_updated = "pending";
-        }
-        else if (line === "Lastedited:") {
-            last_edited_pos = i;
-        }
-    }
+    // Fetch the date format
+    let date_format = get_date_format();
+    // Get the header info
+    let [auto_updated, _, _1, _2, last_edited_line, last_edited_start, last_edited_end] = read_file_header(doc, set, N);
     // Check what we have
-    if (auto_updated === "unknown" || auto_updated === "no") {
+    if (!auto_updated) {
         // No auto update enabled
         console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
         return;
     }
-    else if (auto_updated === "pending") {
-        vscode.window.showErrorMessage("Auto updated should have a line following with 'yes' or 'no'");
-        return;
-    }
     // If auto updateing but no last_edited found
-    if (last_edited_pos === -1 || last_edited_length === undefined) {
-        vscode.window.showErrorMessage("Header is auto updated but not last edited field found");
+    if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
+        console.log("file-header-generator: we want to auto update, but no 'last updated' header found: this should not happen!");
+        vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
         return;
     }
     // Now that everything's correct, update the last edited field
     let edit = new vscode.WorkspaceEdit();
-    edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_pos + 1, 0), new vscode.Position(last_edited_pos + 1, last_edited_length)), set.middle + "   " + get_now());
+    edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)), get_now(date_format));
     let edit_resolve = vscode.workspace.applyEdit(edit);
     edit_resolve.then(() => {
         can_update = false;
@@ -317,24 +625,37 @@ function update_header(doc) {
     });
     console.log("file-header-generator: update success for file: \"" + doc.uri.path + "\"");
 }
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
+/* Handler for the extension activation; basically the first time it is run/loaded. */
 function activate(context) {
     // Only add things if the extension is enabled
     if (get_enabled()) {
-        let disposable = vscode.commands.registerCommand('file-header-generator.generateHeader', prepare_generation);
-        let another_disposable = vscode.workspace.onDidSaveTextDocument(update_header);
-        context.subscriptions.push(disposable, another_disposable);
+        // Register the commands and handlers
+        let generate_header = vscode.commands.registerCommand('file-header-generator.generateHeader', prepare_generation);
+        // let update_date_format = vscode.commands.registerCommand('file-header-generator.updateDateFormat', prepare_file_update);
+        // let update_date_formats = vscode.commands.registerCommand('file-header-generator.updateDateFormat', prepare_workspace_update);
+        let update_date_format = vscode.commands.registerCommand('file-header-generator.updateDateFormat', prepare_update);
+        let update_date_formats = vscode.commands.registerCommand('file-header-generator.updateDateFormats', prepare_updates);
+        let on_did_save_handler = vscode.workspace.onDidSaveTextDocument(update_header);
+        // Push them to the context
+        context.subscriptions.push(generate_header, update_date_format, update_date_formats, on_did_save_handler);
     }
     else {
-        let disposable = vscode.commands.registerCommand('file-header-generator.generateHeader', () => {
+        // Register the commands and handlers
+        let generate_header = vscode.commands.registerCommand('file-header-generator.generateHeader', () => {
             vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
         });
-        context.subscriptions.push(disposable);
+        let update_date_format = vscode.commands.registerCommand('file-header-generator.updateDateFormat', () => {
+            vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
+        });
+        let update_date_formats = vscode.commands.registerCommand('file-header-generator.updateDateFormat', () => {
+            vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
+        });
+        // Push them to the context
+        context.subscriptions.push(generate_header, update_date_format, update_date_formats);
     }
 }
 exports.activate = activate;
-// this method is called when your extension is deactivated
+/* Handler for the extension deactivation. */
 function deactivate() { }
 exports.deactivate = deactivate;
 //# sourceMappingURL=extension.js.map

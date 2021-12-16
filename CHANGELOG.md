@@ -42,7 +42,7 @@
 - CSS support
 - PHP support
 
-### Changes
+### Changed
 - Altered placeholder for file description to be a little more accurate
 
 ## [1.0.7] - 01-05-2021
@@ -55,3 +55,13 @@
 
 ### Fixed
  - A few vulnerabilities in dependencies, by upgrading to newer dependencies.
+
+## [1.1.0] - 16-12-2021
+
+### Added
+ - Rust support
+ - New 'Update Date' and 'Update Dates (All Files)' command, which update the date formats to the one currently used.
+
+### Changed
+ - The FileHeaderGenerator now uses custom dateformats, which can be edited by the 'dateFormat' option. Hopefully, this fixes the bug where the automatic 'last-updated' doesn't work on all systems.
+ - Changed the default number of lines to search from 20 to 15.
