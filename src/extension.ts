@@ -18,9 +18,6 @@
 import * as vscode from 'vscode';
 // Also import moment for date formatting
 import { DateTime } from "luxon";
-import { rejects } from 'assert';
-import { format } from 'path';
-import internal = require('assert');
 
 
 /***** HELPER CLASSES *****/
