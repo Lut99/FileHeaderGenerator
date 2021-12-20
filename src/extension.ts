@@ -18,6 +18,9 @@
 import * as vscode from 'vscode';
 // Also import moment for date formatting
 import { DateTime } from "luxon";
+import { rejects } from 'assert';
+import { format } from 'path';
+import internal = require('assert');
 
 
 /***** HELPER CLASSES *****/
@@ -74,7 +77,7 @@ function get_date_format(): string {
 	let config = vscode.workspace.getConfiguration();
 	let data = config.get<string>("file-header-generator.dateFormat");
 	if (data === undefined) {
-		return "<system>";
+		return "<locale>";
 	}
 	return data;
 }
@@ -143,27 +146,24 @@ function get_comment_set(doc: vscode.TextDocument): CommentSet {
 	let id = doc.languageId;
 	// Use that for the comment character
 	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl" || id === "rust") {
-		console.log("file-header-generator: using C-style comments");
 		return new CommentSet("/*", " *", "**/");
 	} else if (id === "python" || id === "shellscript" || id === "makefile" || id === "cmake") {
-		console.log("file-header-generator: using script-style comments");
 		return new CommentSet("#", "#", "#");
 	} else if (id === "lua") {
-		console.log("file-header-generator: using Lua comments");
 		return new CommentSet("--[[", "    ", "--]]");
 	} else if (id === "html") {
-		console.log("file-header-generator: using HTML comments");
 		return new CommentSet("<!--", "    ", "-->");
 	} else {
-		console.log("file-header-generator: unknown language, so using no comments");
 		return new CommentSet("", "", "");
 	}
 }
 
 /* Converts the given datetime to the given format. */
 function date_to_format(date: DateTime, formatString: string): string {
-	if (formatString === "<system>") {
+	if (formatString === "<locale>") {
 		return date.toLocaleString(DateTime.DATETIME_FULL_WITH_SECONDS);
+	} else if (formatString === "<iso>") {
+		return date.toISO();
 	} else {
 		return date.toFormat(formatString)
 	}
@@ -228,17 +228,22 @@ function get_line(text: string): string | undefined {
 }
 
 /* Returns the same string, except with all spaces stripped in front and at the back of the string. */
-function strip_spaces(text: string): string {
+function strip_whitelines(text: string): string {
+	// Define the function that checks for whitelines
+	let is_whiteline = (c: string) => {
+		return c === " " || c === "\r" || c === "\n" || c === "\t";
+	};
+
 	// First, skip all start spaces
 	let start_i = 0;
 	for (; start_i < text.length; start_i++) {
-		if (text[start_i] !== " ") { break; }
+		if (!is_whiteline(text[start_i])) { break; }
 	}
 	
 	// Skip the end spaces
 	let end_i = text.length - 1;
 	for (; end_i >= 0; end_i--) {
-		if (text[end_i] !== " ") { break; }
+		if (!is_whiteline(text[end_i])) { break; }
 	}
 
 	// If the end_i is before the start_i, return an empty string (only happens with only spaces)
@@ -249,7 +254,7 @@ function strip_spaces(text: string): string {
 	// Otherwise, return the appropriate substing
 	return text.substring(start_i, end_i + 1);
 }
-
+// dd MMM yyyy, HH:mm:ss
 /* Returns whether or not the given file is auto-updated or not. If so, then also returns the position and length of the values of the created date and the last-edited date. */
 function read_file_header(doc: vscode.TextDocument, set: CommentSet, max_lines_to_search: number): [boolean, number, number, number, number, number, number] {
 	// Simply search the first N lines for the line: set.middle + " Auto updated?"
@@ -276,7 +281,7 @@ function read_file_header(doc: vscode.TextDocument, set: CommentSet, max_lines_t
 		let line = raw_line.substring(set.middle.length);
 
 		// Then, remove all spaces
-		line = strip_spaces(line);
+		line = strip_whitelines(line);
 
 		// Check if it's one of the lines we want
 		if (auto_updated === "pending") {
@@ -316,11 +321,11 @@ function read_file_header(doc: vscode.TextDocument, set: CommentSet, max_lines_t
 }
 
 /* Opens the given document at the given position. */
-function goto_position(doc: vscode.TextDocument, range: vscode.Range): void {
+function goto_position(doc: vscode.TextDocument, end_pos: vscode.Position): void {
 	let editor_promise = vscode.window.showTextDocument(doc, undefined, false);
 	editor_promise.then((editor) => {
 		// Show the range
-		editor.revealRange(range);
+		editor.revealRange(new vscode.Range(new vscode.Position(0, 0), end_pos));
 	});
 }
 
@@ -393,222 +398,13 @@ function generate_header(doc: vscode.TextDocument, description: string): void {
 
 
 
-/* Prepares updating the formats in this file by quering the user for the old format. */
-async function prepare_update() {
-	// Fetch the currently opened document
-	let doc = vscode.window.activeTextEditor?.document;
-	if (doc === undefined) {
-		vscode.window.showErrorMessage("No open file");
-		return;
-	}
-
-	// Get the new format
-	let new_format = get_date_format();
-
-	// Query the user about a description
-	let old_format = await vscode.window.showInputBox({
-		placeHolder: "e.g., dd MMM yyyy, HH:mm:ss",
-		prompt: "Date format of old entries (see the extension README)"
-	});
-	if (old_format === undefined) {
-		return;
-	} else if (old_format === "") {
-		vscode.window.showInformationMessage("You need to provide an old format to be able to transfer the times to the new format.")
-		return;
-	}
-
-	// Stop if the formats are the same
-	if (old_format == new_format) {
-		vscode.window.showInformationMessage("Old format is the same as new format; nothing to do.");
-		return;
-	}
-
-	// Do the actual generation
-	let result = update_date_format(doc, old_format, new_format);
-	if (result === false) {
-		// Failure; early quit
-		return;
-	}
-
-	// Otherwise, show message
-	let show_message = () => { vscode.window.showInformationMessage("Update date format in current file success."); };
-	if (result === true) {
-		show_message();
-	} else {
-		result.then(show_message, (reason) => {
-			vscode.window.showErrorMessage("Could not update date format in current file: " + reason);
-		});
-	}
-}
-
-/* Given a document, an old format and a new format, tries to update the created and last-updated times in that files to the new format. */
-function update_date_format(doc: vscode.TextDocument, old_format: string, new_format: string, show_complete: boolean = true): Thenable<boolean> | boolean {
-	// Fetch the comment set
-	let set = get_comment_set(doc);
-	// Fetch the maximum number of lines we'll search
-	let N = get_n_lines();
-
-	// Get the header info
-	let [auto_updated, created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end] = read_file_header(doc, set, N);
-
-	// Check what we have
-	if (!auto_updated) {
-		// No auto update enabled
-		console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
-		return false;
-	}
-
-	// If auto updateing but no last_edited found
-	if (created_line === -1 || created_start === -1 || created_end === -1) {
-		console.log("file-header-generator: we want to auto update '" + doc.fileName + "', but no 'created' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file '" + doc.fileName + "' (see log)");
-		return false;
-	}
-	if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
-		console.log("file-header-generator: we want to auto update '" + doc.fileName + "', but no 'last updated' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file '" + doc.fileName + "' (see log)");
-		return false;
-	}
-
-	// Now that that's correct, try to fetch the created date using the format
-	let raw_created_date = doc.getText(new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)));
-	let created_date = DateTime.fromFormat(raw_created_date, old_format);
-	if (!created_date.isValid) {
-		if (created_date.invalidReason === "unparsable") {
-			let res = vscode.window.showWarningMessage("Cannot parse created date '" + raw_created_date + "'; do you have the correct format?", "Go to location");
-			res.then((button) => {
-				if (button === "Go to location") {
-					goto_position(doc, new vscode.Position(created_line, created_start));
-				}
-				// Ignore otherwise
-			});
-		} else {
-			let res = vscode.window.showWarningMessage("Created date '" + raw_created_date + "' is not a valid date: " + created_date.invalidReason, "Go to location");
-			res.then((button) => {
-				if (button === "Go to location") {
-					goto_position(doc, new vscode.Position(created_line, created_start));
-				}
-				// Ignore otherwise
-			});
-		}
-	}
-
-	// Also do the edited date
-	let raw_last_edited_date = doc.getText(new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)));
-	console.log("Raw last edited: '" + raw_last_edited_date + "'");
-	let last_edited_date = DateTime.fromFormat(raw_last_edited_date, old_format);
-	if (!last_edited_date.isValid) {
-		if (last_edited_date.invalidReason === "unparsable") {
-			vscode.window.showWarningMessage("Cannot parse last edited date '" + raw_last_edited_date + "'; do you have the correct format?\nIn file '" + doc.fileName + "'");
-		} else {
-			vscode.window.showWarningMessage("Last edited date '" + raw_last_edited_date + "' is not a valid date: " + last_edited_date.invalidReason + "\nIn file '" + doc.fileName + "'");
-		}
-	}
-
-	// Prepare editing
-	let edit = new vscode.WorkspaceEdit();
-	let what_did_we_do = "";
-	if (created_date.isValid) {
-		// Prepare the edit
-		edit.replace(doc.uri, new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)), date_to_format(created_date, new_format));
-		what_did_we_do = "created date";
-	}
-	if (last_edited_date.isValid) {
-		// Prepare the replace
-		edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)), date_to_format(last_edited_date, new_format));
-		if (what_did_we_do.length == 0) {
-			what_did_we_do = "last edited date";
-		} else {
-			what_did_we_do += " and last edited date";
-		}
-	}
-
-	// Resolve the update asynchronously
-	if (created_date.isValid || last_edited_date.isValid) {
-		let edit_resolve = vscode.workspace.applyEdit(edit);
-		return edit_resolve;
-	}
-	
-	// Otherwise, did nothing
-	return true;
-}
-
-
-
-/* Prepares updating the formats in all workspace files by quering the user for the old format. */
-async function prepare_updates() {
-	// Get the new format
-	let new_format = get_date_format();
-	
-	// If there is no workspace folders, stop
-	if (vscode.workspace.workspaceFolders === undefined) {
-		vscode.window.showInformationMessage("No workspaces openened; nothing to do.");
-		return;
-	}
-
-	// First, select the workspace to open
-	let selected_workspace = await vscode.window.showWorkspaceFolderPick();
-	if (selected_workspace === undefined) {
-		return;
-	}
-
-	// Search that workspace for files
-	let relative_glob = new vscode.RelativePattern(selected_workspace, "**/*");
-	let docs_job = vscode.workspace.findFiles(relative_glob);
-	let docs = await docs_job;
-
-	// If there are none, let the user know
-	if (docs.length === 0) {
-		vscode.window.showInformationMessage("No documents in workspace; nothing to do.");
-		return;
-	}
-
-	// Query the user about a description
-	let old_format = await vscode.window.showInputBox({
-		placeHolder: "e.g., dd MMM yyyy, HH:mm:ss",
-		prompt: "Date format of old entries (see the extension README)"
-	});
-	if (old_format === undefined) {
-		return;
-	} else if (old_format === "") {
-		vscode.window.showInformationMessage("You need to provide an old format to be able to transfer the times to the new format.")
-		return;
-	}
-
-	// Stop if the formats are the same
-	if (old_format == new_format) {
-		vscode.window.showInformationMessage("Old format is the same as new format; nothing to do.");
-		return;
-	}
-
-	// Do the actual generation
-	start_update_date_formats(docs, old_format, new_format);
-}
-
-/* Given a list of resources, an old format and a new format, tries to replace the dates in the old format with the new one. */
-function start_update_date_formats(docs: vscode.Uri[], old_format: string, new_format: string): void {
-	// Go through the textdocuments
-	for (let i = 0; i < docs.length; i++) {
-		// First, open the textdocument
-		let doc = vscode.workspace.openTextDocument(docs[i]);
-		doc.then((opened_doc) => {
-			// Opening successful: run the update
-			update_date_format(opened_doc, old_format, new_format);
-		}, (reason) => {
-			// Opening a failure: show so
-			vscode.window.showWarningMessage("Could not open file '" + docs[i].fsPath + "': " + reason);
-		});
-	}
-}
-
-
-
 
 
 /***** EVENTS *****/
 /* Event listener for when a user saves a file, i.e. the header should be updated. */
 var can_update = true;
 function update_header(doc: vscode.TextDocument): void {
+	// Also don't do anything if no change has occurred
 	if (!can_update) {
 		return;
 	}
@@ -658,28 +454,18 @@ export function activate(context: vscode.ExtensionContext) {
 	if (get_enabled()) {
 		// Register the commands and handlers
 		let generate_header = vscode.commands.registerCommand('file-header-generator.generateHeader', prepare_generation);
-		// let update_date_format = vscode.commands.registerCommand('file-header-generator.updateDateFormat', prepare_file_update);
-		// let update_date_formats = vscode.commands.registerCommand('file-header-generator.updateDateFormat', prepare_workspace_update);
-		let update_date_format = vscode.commands.registerCommand('file-header-generator.updateDateFormat', prepare_update);
-		let update_date_formats = vscode.commands.registerCommand('file-header-generator.updateDateFormats', prepare_updates);
 		let on_did_save_handler = vscode.workspace.onDidSaveTextDocument(update_header);
 
 		// Push them to the context
-		context.subscriptions.push(generate_header, update_date_format, update_date_formats, on_did_save_handler);
+		context.subscriptions.push(generate_header, on_did_save_handler);
 	} else {
 		// Register the commands and handlers
 		let generate_header = vscode.commands.registerCommand('file-header-generator.generateHeader', () => {
 			vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
 		});
-		let update_date_format = vscode.commands.registerCommand('file-header-generator.updateDateFormat', () => {
-			vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
-		});
-		let update_date_formats = vscode.commands.registerCommand('file-header-generator.updateDateFormat', () => {
-			vscode.window.showInformationMessage("Extension 'File Header Generator' is not enabled. Enable it in settings.");
-		});
 
 		// Push them to the context
-		context.subscriptions.push(generate_header, update_date_format, update_date_formats);
+		context.subscriptions.push(generate_header);
 	}
 }
 

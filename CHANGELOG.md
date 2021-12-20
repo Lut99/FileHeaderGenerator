@@ -56,12 +56,14 @@
 ### Fixed
  - A few vulnerabilities in dependencies, by upgrading to newer dependencies.
 
-## [1.1.0] - 16-12-2021
+## [1.1.0] - 21-12-2021
 
 ### Added
  - Rust support
- - New 'Update Date' and 'Update Dates (All Files)' command, which update the date formats to the one currently used.
 
 ### Changed
- - The FileHeaderGenerator now uses custom dateformats, which can be edited by the 'dateFormat' option. Hopefully, this fixes the bug where the automatic 'last-updated' doesn't work on all systems.
+ - The FileHeaderGenerator can now use custom dateformats, which can be edited by the 'dateFormat' option.
  - Changed the default number of lines to search from 20 to 15.
+
+### Fixed
+ - The automatic update not working on Windows due to carriage returns (`\r`).
