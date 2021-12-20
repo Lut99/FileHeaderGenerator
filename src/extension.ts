@@ -4,7 +4,7 @@
  * Created:
  *   1/15/2020, 4:29:13 PM
  * Last edited:
- *   16/12/2021, 18:20:07
+ *   20/12/2021, 19:56:20
  * Auto updated?
  *   Yes
  *
@@ -315,6 +315,15 @@ function read_file_header(doc: vscode.TextDocument, set: CommentSet, max_lines_t
 	return [auto_updated === "yes", created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end];
 }
 
+/* Opens the given document at the given position. */
+function goto_position(doc: vscode.TextDocument, range: vscode.Range): void {
+	let editor_promise = vscode.window.showTextDocument(doc, undefined, false);
+	editor_promise.then((editor) => {
+		// Show the range
+		editor.revealRange(range);
+	});
+}
+
 
 
 
@@ -415,11 +424,25 @@ async function prepare_update() {
 	}
 
 	// Do the actual generation
-	update_date_format(doc, old_format, new_format);
+	let result = update_date_format(doc, old_format, new_format);
+	if (result === false) {
+		// Failure; early quit
+		return;
+	}
+
+	// Otherwise, show message
+	let show_message = () => { vscode.window.showInformationMessage("Update date format in current file success."); };
+	if (result === true) {
+		show_message();
+	} else {
+		result.then(show_message, (reason) => {
+			vscode.window.showErrorMessage("Could not update date format in current file: " + reason);
+		});
+	}
 }
 
 /* Given a document, an old format and a new format, tries to update the created and last-updated times in that files to the new format. */
-function update_date_format(doc: vscode.TextDocument, old_format: string, new_format: string): void {
+function update_date_format(doc: vscode.TextDocument, old_format: string, new_format: string, show_complete: boolean = true): Thenable<boolean> | boolean {
 	// Fetch the comment set
 	let set = get_comment_set(doc);
 	// Fetch the maximum number of lines we'll search
@@ -432,19 +455,19 @@ function update_date_format(doc: vscode.TextDocument, old_format: string, new_fo
 	if (!auto_updated) {
 		// No auto update enabled
 		console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
-		return;
+		return false;
 	}
 
 	// If auto updateing but no last_edited found
 	if (created_line === -1 || created_start === -1 || created_end === -1) {
-		console.log("file-header-generator: we want to auto update, but no 'created' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
-		return;
+		console.log("file-header-generator: we want to auto update '" + doc.fileName + "', but no 'created' header found: this should not happen!")
+		vscode.window.showErrorMessage("Internal error occurred while updating file '" + doc.fileName + "' (see log)");
+		return false;
 	}
 	if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
-		console.log("file-header-generator: we want to auto update, but no 'last updated' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
-		return;
+		console.log("file-header-generator: we want to auto update '" + doc.fileName + "', but no 'last updated' header found: this should not happen!")
+		vscode.window.showErrorMessage("Internal error occurred while updating file '" + doc.fileName + "' (see log)");
+		return false;
 	}
 
 	// Now that that's correct, try to fetch the created date using the format
@@ -452,9 +475,21 @@ function update_date_format(doc: vscode.TextDocument, old_format: string, new_fo
 	let created_date = DateTime.fromFormat(raw_created_date, old_format);
 	if (!created_date.isValid) {
 		if (created_date.invalidReason === "unparsable") {
-			vscode.window.showWarningMessage("Cannot parse created date '" + raw_created_date + "'; do you have the correct format?");
+			let res = vscode.window.showWarningMessage("Cannot parse created date '" + raw_created_date + "'; do you have the correct format?", "Go to location");
+			res.then((button) => {
+				if (button === "Go to location") {
+					goto_position(doc, new vscode.Position(created_line, created_start));
+				}
+				// Ignore otherwise
+			});
 		} else {
-			vscode.window.showWarningMessage("Created date '" + raw_created_date + "' is not a valid date: " + created_date.invalidReason);
+			let res = vscode.window.showWarningMessage("Created date '" + raw_created_date + "' is not a valid date: " + created_date.invalidReason, "Go to location");
+			res.then((button) => {
+				if (button === "Go to location") {
+					goto_position(doc, new vscode.Position(created_line, created_start));
+				}
+				// Ignore otherwise
+			});
 		}
 	}
 
@@ -464,9 +499,9 @@ function update_date_format(doc: vscode.TextDocument, old_format: string, new_fo
 	let last_edited_date = DateTime.fromFormat(raw_last_edited_date, old_format);
 	if (!last_edited_date.isValid) {
 		if (last_edited_date.invalidReason === "unparsable") {
-			vscode.window.showWarningMessage("Cannot parse last edited date '" + raw_last_edited_date + "'; do you have the correct format?");
+			vscode.window.showWarningMessage("Cannot parse last edited date '" + raw_last_edited_date + "'; do you have the correct format?\nIn file '" + doc.fileName + "'");
 		} else {
-			vscode.window.showWarningMessage("Last edited date '" + raw_last_edited_date + "' is not a valid date: " + last_edited_date.invalidReason);
+			vscode.window.showWarningMessage("Last edited date '" + raw_last_edited_date + "' is not a valid date: " + last_edited_date.invalidReason + "\nIn file '" + doc.fileName + "'");
 		}
 	}
 
@@ -491,11 +526,11 @@ function update_date_format(doc: vscode.TextDocument, old_format: string, new_fo
 	// Resolve the update asynchronously
 	if (created_date.isValid || last_edited_date.isValid) {
 		let edit_resolve = vscode.workspace.applyEdit(edit);
-		edit_resolve.then(() => {
-			// Show we made it!
-			vscode.window.showInformationMessage("Updated " + what_did_we_do + " to new format.");
-		});
+		return edit_resolve;
 	}
+	
+	// Otherwise, did nothing
+	return true;
 }
 
 
@@ -547,85 +582,21 @@ async function prepare_updates() {
 	}
 
 	// Do the actual generation
-	update_date_formats(docs, old_format, new_format);
+	start_update_date_formats(docs, old_format, new_format);
 }
 
 /* Given a list of resources, an old format and a new format, tries to replace the dates in the old format with the new one. */
-function update_date_formats(docs: vscode.Uri[], old_format: string, new_format: string): void {
-	// Fetch the comment set
-	let set = get_comment_set(doc);
-	// Fetch the maximum number of lines we'll search
-	let N = get_n_lines();
-
-	// Get the header info
-	let [auto_updated, created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end] = read_file_header(doc, set, N);
-
-	// Check what we have
-	if (!auto_updated) {
-		// No auto update enabled
-		console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
-		return;
-	}
-
-	// If auto updateing but no last_edited found
-	if (created_line === -1 || created_start === -1 || created_end === -1) {
-		console.log("file-header-generator: we want to auto update, but no 'created' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
-		return;
-	}
-	if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
-		console.log("file-header-generator: we want to auto update, but no 'last updated' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
-		return;
-	}
-
-	// Now that that's correct, try to fetch the created date using the format
-	let raw_created_date = doc.getText(new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)));
-	let created_date = DateTime.fromFormat(raw_created_date, old_format);
-	if (!created_date.isValid) {
-		if (created_date.invalidReason === "unparsable") {
-			vscode.window.showWarningMessage("Cannot parse created date '" + raw_created_date + "'; do you have the correct format?");
-		} else {
-			vscode.window.showWarningMessage("Created date '" + raw_created_date + "' is not a valid date: " + created_date.invalidReason);
-		}
-	}
-
-	// Also do the edited date
-	let raw_last_edited_date = doc.getText(new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)));
-	console.log("Raw last edited: '" + raw_last_edited_date + "'");
-	let last_edited_date = DateTime.fromFormat(raw_last_edited_date, old_format);
-	if (!last_edited_date.isValid) {
-		if (last_edited_date.invalidReason === "unparsable") {
-			vscode.window.showWarningMessage("Cannot parse last edited date '" + raw_last_edited_date + "'; do you have the correct format?");
-		} else {
-			vscode.window.showWarningMessage("Last edited date '" + raw_last_edited_date + "' is not a valid date: " + last_edited_date.invalidReason);
-		}
-	}
-
-	// Prepare editing
-	let edit = new vscode.WorkspaceEdit();
-	let what_did_we_do = "";
-	if (created_date.isValid) {
-		// Prepare the edit
-		edit.replace(doc.uri, new vscode.Range(new vscode.Position(created_line, created_start), new vscode.Position(created_line, created_end)), date_to_format(created_date, new_format));
-		what_did_we_do = "created date";
-	}
-	if (last_edited_date.isValid) {
-		// Prepare the replace
-		edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)), date_to_format(last_edited_date, new_format));
-		if (what_did_we_do.length == 0) {
-			what_did_we_do = "last edited date";
-		} else {
-			what_did_we_do += " and last edited date";
-		}
-	}
-
-	// Resolve the update asynchronously
-	if (created_date.isValid || last_edited_date.isValid) {
-		let edit_resolve = vscode.workspace.applyEdit(edit);
-		edit_resolve.then(() => {
-			// Show we made it!
-			vscode.window.showInformationMessage("Updated " + what_did_we_do + " to new format.");
+function start_update_date_formats(docs: vscode.Uri[], old_format: string, new_format: string): void {
+	// Go through the textdocuments
+	for (let i = 0; i < docs.length; i++) {
+		// First, open the textdocument
+		let doc = vscode.workspace.openTextDocument(docs[i]);
+		doc.then((opened_doc) => {
+			// Opening successful: run the update
+			update_date_format(opened_doc, old_format, new_format);
+		}, (reason) => {
+			// Opening a failure: show so
+			vscode.window.showWarningMessage("Could not open file '" + docs[i].fsPath + "': " + reason);
 		});
 	}
 }
