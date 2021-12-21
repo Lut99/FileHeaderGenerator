@@ -64,6 +64,7 @@
 ### Changed
  - The FileHeaderGenerator can now use custom dateformats, which can be edited by the 'dateFormat' option.
  - Changed the default number of lines to search from 20 to 15.
+ - The extension now starts up after Visual Studio Code does, increasing startup performance.
 
 ### Fixed
  - The automatic update not working on Windows due to carriage returns (`\r`).
