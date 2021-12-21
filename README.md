@@ -17,7 +17,7 @@ When the header is generated, it is automatically maintained (i.e., the 'Last Ed
 
 ## Commands
 
-The File Header Generator extension current contributes the following two commands:
+The File Header Generator extension current contributes the following command:
 
 * `file-header-generator.generateHeader`: Generates a header in the current file. Once run, it first prompts the user to input a description, which will automatically be linewrapped in the resulting header. The header will be placed at the start of the file, before any text already present.
 
