@@ -68,3 +68,12 @@
 
 ### Fixed
  - The automatic update not working on Windows due to carriage returns (`\r`).
+
+## [1.2.0] - 30-07-2022
+### Added
+ - New `file-header-generator.rustDocString` property that determines if Rust comments will implement the new docstring-aware description.
+
+### Changed
+ - Rust to now be docstring-aware, using `//!` for the description to propagate it to Rust's auto-generated docs. This behaviour can be controlled with the `file-header-generator.rustDocString` setting.
+ - Rust last-edited updates to overwrite comments with the current comment style (based on the `file-header-generator.rustDocString` property).
+ - The internal codebase to now use a Header struct, which makes it much more clear what we're parsing and how.

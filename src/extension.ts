@@ -4,7 +4,7 @@
  * Created:
  *   15 Jan 2020, 16:29:13
  * Last edited:
- *   21 Dec 2021, 01:17:27
+ *   30 Jul 2022, 17:43:47
  * Auto updated?
  *   Yes
  *
@@ -18,6 +18,8 @@
 import * as vscode from 'vscode';
 // Also import moment for date formatting
 import { DateTime } from "luxon";
+import { timeStamp } from 'console';
+import { privateEncrypt } from 'crypto';
 
 
 /***** HELPER CLASSES *****/
@@ -26,11 +28,298 @@ class CommentSet {
 	start: string;
 	middle: string;
 	end: string;
+	doc: string;
 
-	constructor(start: string, middle: string, end: string) {
+	constructor(start: string, middle: string, end: string, doc: string = middle) {
 		this.start = start;
 		this.middle = middle;
 		this.end = end;
+		this.doc = doc;
+	}
+}
+
+/* Wraps around a value to also indicate the source text position. */
+class TextValue<T> {
+	value : T;
+	start : vscode.Position;
+	end   : vscode.Position;
+
+
+	constructor(value: T, start: vscode.Position = new vscode.Position(0, 0), end: vscode.Position = new vscode.Position(0, 0)) {
+		this.value = value;
+		this.start = start;
+		this.end   = end;
+	}
+}
+
+/* The Header class represents a raw header which we may modify. */
+class Header {
+	start : vscode.Position;
+	end   : vscode.Position;
+
+	title  : TextValue<string>;
+	author : TextValue<string>;
+
+	created      : TextValue<DateTime>;
+	edited       : TextValue<DateTime>;
+	auto_updated : TextValue<boolean>;
+
+	description : TextValue<string>;
+
+
+	constructor(title: TextValue<string> | string, author: TextValue<string> | string, created: TextValue<DateTime> | DateTime, edited: TextValue<DateTime> | DateTime, auto_updated: TextValue<boolean> | boolean, description: TextValue<string> | string, start: vscode.Position = new vscode.Position(0, 0), end: vscode.Position = new vscode.Position(0, 0)) {
+		// Wrap the values in TextValues if not already
+		if (typeof title === "string")         { title = new TextValue(title); }
+		if (typeof author === "string")        { author = new TextValue(author); }
+		if (created instanceof DateTime)       { created = new TextValue(created); }
+		if (edited instanceof DateTime)        { edited = new TextValue(edited); }
+		if (typeof auto_updated === "boolean") { auto_updated = new TextValue(auto_updated); }
+		if (typeof description === "string")   { description = new TextValue(description); }
+
+		// Store the TextValues
+		this.start        = start;
+		this.end          = end;
+		this.title        = title;
+		this.author       = author;
+		this.created      = created;
+		this.edited       = edited;
+		this.auto_updated = auto_updated;
+		this.description  = description;
+	}
+
+	/* Factory method that reads a header from the given document text. */
+	static from_doc(doc: vscode.TextDocument, set: CommentSet, date_format: string, max_lines_to_search: number, debug: boolean = false): Header | null {
+		// Prepare the fields to collect
+		let title        : TextValue<string> | null   = null;
+		let author       : TextValue<string> | null   = null;
+		let created      : TextValue<DateTime> | null = null;
+		let edited       : TextValue<DateTime> | null = null;
+		let auto_updated : TextValue<boolean> | null  = null;
+		let description  : TextValue<string> | null   = null;
+
+		// Use a stateful parser
+		let something: boolean = false;
+		let state: string = "title";
+		let start : vscode.Position | null = null;
+		let end   : vscode.Position | null = null;
+		for (let l: number = 0; l < max_lines_to_search; l += 1) {
+			// Get the current line
+			let raw_line: string = doc.getText(new vscode.Range(new vscode.Position(l, 0), new vscode.Position(l, 4096)));
+
+			// Get part of the line which is not the comment
+			let line: string;
+			let skip: number;
+			if (raw_line.substring(0, set.start.length + 1) === set.start + " ") { line = raw_line.substring(set.start.length + 1); skip = set.start.length + 1; }
+			else if (raw_line.substring(0, set.middle.length + 1) === set.middle + " ") { line = raw_line.substring(set.middle.length + 1); skip = set.middle.length + 1; }
+			else if (raw_line.substring(0, set.doc.length + 1) === set.doc + " ") { line = raw_line.substring(set.doc.length + 1); skip = set.doc.length + 1; }
+			else if (raw_line.substring(0, set.end.length + 1) === set.end + " ") { line = raw_line.substring(set.end.length + 1); skip = set.end.length + 1; }
+			else { continue; }
+			something = true;
+			end = new vscode.Position(l + 1, raw_line.length);
+
+			// Match based on the state
+			if (state === "idle") {
+				// If it starts with '  by ', it must be the author
+				if (line.substring(0, 5) == "  by ") { author = new TextValue(line.substring(5), new vscode.Position(l, skip), new vscode.Position(l, raw_line.length)); }
+
+				// Otherwise see if it's a 'keyword'
+				if (line === "Created:") {
+					state = "created";
+				} else if (line === "Last edited:") {
+					state = "edited";
+				} else if (line === "Auto updated?") {
+					state = "auto_updated";
+				} else if (line === "Description:") {
+					state = "description";
+				}
+
+			} else if (state === "title") {
+				// Now follows the filename, already capitalized and such
+				title = new TextValue(line, new vscode.Position(l, skip), new vscode.Position(l, raw_line.length));
+				start = new vscode.Position(l, 0);
+				state = "idle";
+
+			} else if (state === "created") {
+				// Parse as date
+				while (line[0] === ' ') { line = line.substring(1); skip += 1; }
+				created = new TextValue(DateTime.fromFormat(line, date_format), new vscode.Position(l, skip), new vscode.Position(l, raw_line.length));
+				state = "idle";
+
+			} else if (state == "edited") {
+				// Parse as date
+				while (line[0] === ' ') { line = line.substring(1); skip += 1; }
+				edited = new TextValue(DateTime.fromFormat(line, date_format), new vscode.Position(l, skip), new vscode.Position(l, raw_line.length));
+				state = "idle";
+
+			} else if (state == "auto_updated") {
+				// Check if the line says 'yes' or 'no'
+				while (line[0] === ' ') { line = line.substring(1); skip += 1; }
+				while (line[line.length - 1] === ' ') { line = line.substring(0, line.length - 2); }
+				if (line.toLowerCase() === "yes") {
+					auto_updated = new TextValue(true, new vscode.Position(l, skip), new vscode.Position(l, raw_line.length));
+				} else {
+					if (debug && line.toLowerCase() !== "no") { console.warn("Unknown auto update value '" + line + "' (expected 'yes' or 'no'); assuming 'no'."); }
+					auto_updated = new TextValue(false, new vscode.Position(l, skip), new vscode.Position(l, raw_line.length));
+				}
+				state = "idle";
+
+			} else if (state == "description") {
+				// Add to the description string, with enters
+				while (line[0] === ' ') { line = line.substring(1); skip += 1; }
+				if (description === null) {
+					description = new TextValue(line, new vscode.Position(l, skip), new vscode.Position(l, raw_line.length));
+				} else {
+					description.value += "\n" + line;
+					description.end    = new vscode.Position(l, raw_line.length - 1);
+				}
+				state = "idle";
+
+			} else {
+				console.error("Got illegal state '" + state + "'; this should never happen! Assuming 'idle' for next line");
+				state = "idle";
+			}
+
+			// If there's any non-comment or end comment out there, do nothing.
+		}
+
+		// If we found nothing at all, stop here
+		if (!something) { return null; }
+
+		// Check for any missing values
+		let now: DateTime = DateTime.now();
+		if (title === null) {
+			if (debug) { console.warn("Title not found in file header; assuming '<title>'"); }
+			title = new TextValue("<title>");
+		}
+		if (author === null) {
+			if (debug) { console.warn("Author not found in file header; assuming 'John Smith'"); }
+			author = new TextValue("John Smith");
+		}
+		if (created === null) {
+			if (debug) { console.warn("Created date not found in file header; assuming now (" + now.toISO() + ")"); }
+			created = new TextValue(now);
+		}
+		if (edited === null) {
+			if (debug) { console.warn("Edited date not found in file header; assuming now (" + now.toISO() + ")"); }
+			edited = new TextValue(now);
+		}
+		if (auto_updated === null) {
+			if (debug) { console.warn("Auto update not found in file header; assuming no"); }
+			auto_updated = new TextValue(false);
+		}
+		if (description === null) {
+			if (debug) { console.warn("Description not found in file header; assuming no description"); }
+			description = new TextValue("");
+		}
+		if (start === null) {
+			start = new vscode.Position(0, 0);
+		}
+		if (end === null) {
+			end = new vscode.Position(0, 0);
+		}
+
+		// Done, return
+		return new Header(title, author, created, edited, auto_updated, description, start, end);
+	}
+
+
+
+	/* Serializes the header to a string. */
+	serialize(set: CommentSet, date_format: string): string {
+		// Wrap the description if necessary
+		let description_wrapped = wrap_description(this.description.value, set.doc + "   ");
+
+		// Create the full comment text
+		let text = set.start + " " + this.title.value + "\n";
+		text += set.middle + "   by " + this.author.value + "\n";
+		text += set.middle + "\n";
+		text += set.middle + " Created:\n";
+		text += set.middle + "   " + this.created.value.toFormat(date_format) + "\n";
+		text += set.middle + " Last edited:\n";
+		text += set.middle + "   " + this.edited.value.toFormat(date_format) + "\n";
+		text += set.middle + " Auto updated?\n";
+		text += set.middle + "   " + (this.auto_updated.value ? "Yes" : "No") + "\n";
+		text += set.middle + "\n";
+		text += set.middle + " Description:\n";
+		text += description_wrapped;
+		text += set.end;
+
+		// Done
+		return text;
+	}
+
+
+
+	/* Writes the Header at the start of the given document. */
+	insert_top(doc: vscode.TextDocument, set: CommentSet, date_format: string) {
+		// Serialize the text
+		let text = this.serialize(set, date_format) + "\n\n";
+
+		// Create an edit that writes the text
+		let edit = new vscode.WorkspaceEdit();
+		edit.insert(doc.uri, new vscode.Position(0, 0), text);
+		vscode.workspace.applyEdit(edit);
+	}
+
+	/* Flushes the given list of values to the file in one update. */
+	flush(doc: vscode.TextDocument, date_format: string, updates: string[]): Thenable<boolean> {
+		let uri: vscode.Uri = doc.uri;
+
+		// Iterate over the to-be-updated fields
+		let edit = new vscode.WorkspaceEdit();
+		for (const field of updates) {
+			// Switch on the field
+			if (field === "title") {
+				// Replace the value with the new string, then update the internal end
+				edit.replace(uri, new vscode.Range(this.title.start, this.title.end), this.title.value);
+				this.title.end = new vscode.Position(this.title.end.line, this.title.value.length - 1);
+			} else if (field === "author") {
+				// Replace the value with the new string, then update the internal end
+				edit.replace(uri, new vscode.Range(this.author.start, this.author.end), this.author.value);
+				this.author.end = new vscode.Position(this.author.end.line, this.author.value.length - 1);
+			} else if (field === "created") {
+				// Create the format value
+				let sdate: string = this.created.value.toFormat(date_format);
+
+				// Replace the value with the date, then update the internal end
+				edit.replace(uri, new vscode.Range(this.created.start, this.created.end), sdate);
+				this.created.end = new vscode.Position(this.created.end.line, sdate.length - 1);
+			} else if (field === "edited") {
+				// Create the format value
+				let sdate: string = this.edited.value.toFormat(date_format);
+
+				// Replace the value with the date, then update the internal end
+				edit.replace(uri, new vscode.Range(this.edited.start, this.edited.end), sdate);
+				this.edited.end = new vscode.Position(this.edited.end.line, sdate.length - 1);
+			} else if (field === "auto_updated") {
+				// Cast the true/false to a yes/no string
+				let sauto_updated: string = this.auto_updated.value ? "Yes" : "No";
+
+				// Replace the value with the date, then update the internal end
+				edit.replace(uri, new vscode.Range(this.auto_updated.start, this.auto_updated.end), sauto_updated);
+				this.auto_updated.end = new vscode.Position(this.auto_updated.end.line, sauto_updated.length - 1);
+			} else if (field === "description") {
+				// Replace the value with the new string, then update the internal end
+				edit.replace(uri, new vscode.Range(this.description.start, this.description.end), this.description.value);
+				this.description.end = new vscode.Position(this.description.end.line + (this.description.value.match(/\n/g) || '').length, this.description.value.split("\n").pop()!.length - 1);
+			} else {
+				console.error("Got illegal field '" + field + "'; this should never happen! Skipping");
+			}
+		}
+
+		// Perform the edit
+		return vscode.workspace.applyEdit(edit);
+	}
+
+	/* Regenerates the Header with the given CommentSet. This effectively flushes all fields. */
+	regenerate(doc: vscode.TextDocument, new_set: CommentSet, date_format: string) {
+		// Serialize the text
+		let text = this.serialize(new_set, date_format);
+
+		// Create an edit that writes the text
+		let edit = new vscode.WorkspaceEdit();
+		edit.replace(doc.uri, new vscode.Range(this.start, this.end), text);
+		vscode.workspace.applyEdit(edit);
 	}
 }
 
@@ -50,7 +339,7 @@ function get_enabled(): boolean {
 }
 
 /* Function that returns the editor's name from VSCode's settings. */
-function get_editor(): string {
+function get_author(): string {
 	let config = vscode.workspace.getConfiguration();
 	let data = config.get<string>("file-header-generator.username");
 	if (data === undefined) {
@@ -75,6 +364,16 @@ function get_date_format(): string {
 	let data = config.get<string>("file-header-generator.dateFormat");
 	if (data === undefined) {
 		return "<locale>";
+	}
+	return data;
+}
+
+/* Function that returns the rust docstring-enabled setting from VSCode's settings. */
+function get_rust_docstring_enabled(): boolean {
+	let config = vscode.workspace.getConfiguration();
+	let data = config.get<boolean>("file-header-generator.rustDocString");
+	if (data === undefined) {
+		return true;
 	}
 	return data;
 }
@@ -139,10 +438,11 @@ function get_header_title(doc: vscode.TextDocument): string {
 }
 
 /* Given the document, returns the appropriate CommentSet instance with the comments used for the document's defined language. */
-function get_comment_set(doc: vscode.TextDocument): CommentSet {
+function get_comment_set(doc: vscode.TextDocument, rust_docstring: boolean): CommentSet {
 	let id = doc.languageId;
+
 	// Use that for the comment character
-	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl" || id === "rust") {
+	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl" || (!rust_docstring && id === "rust")) {
 		return new CommentSet("/*", " *", "**/");
 	} else if (id === "python" || id === "shellscript" || id === "makefile" || id === "cmake") {
 		return new CommentSet("#", "#", "#");
@@ -150,30 +450,15 @@ function get_comment_set(doc: vscode.TextDocument): CommentSet {
 		return new CommentSet("--[[", "    ", "--]]");
 	} else if (id === "html") {
 		return new CommentSet("<!--", "    ", "-->");
+	} else if (rust_docstring && id === "rust") {
+		return new CommentSet("// ", "// ", "// ", "//!");
 	} else {
 		return new CommentSet("", "", "");
 	}
 }
 
-/* Converts the given datetime to the given format. */
-function date_to_format(date: DateTime, formatString: string): string {
-	if (formatString === "<locale>") {
-		return date.toLocaleString(DateTime.DATETIME_FULL_WITH_SECONDS);
-	} else if (formatString === "<iso>") {
-		return date.toISO();
-	} else {
-		return date.toFormat(formatString)
-	}
-}
-
-/* Returns the current time in the given date/time format. */
-function get_now(formatString: string): string {
-	let now = DateTime.now();
-	return date_to_format(now, formatString);
-}
-
 /* Given a lengthy description, wraps it in lines of at most line_length character long. The line_start is the bit of text that should be printed in front of each line (usually the middle comment tag). */
-function wrap_description(description: string, line_start: string, line_length: number = 79) {
+function wrap_description(description: string, line_start: string, line_length: number = 79): string {
 	let description_words = description.split(" ");
 	let wrapped_description = "";
 	let line = line_start;
@@ -204,126 +489,6 @@ function wrap_description(description: string, line_start: string, line_length: 
 	// Add the line as final one
 	wrapped_description += line + "\n";
 	return wrapped_description;
-}
-
-/* Returns the first line from a long block of multiple lines. Looks for classic newlines ("\n") as delimiters. */
-function get_line(text: string): string | undefined {
-	let to_return = "";
-	for (var i = 0; i < text.length; i++) {
-		if (text[i] === "\n") {
-			// Done, return the line
-			return to_return;
-		}
-		to_return += text[i];
-	}
-	
-	// No newline was found, return the remaining text unless no text was found at all
-	if (to_return === "") {
-		return undefined;
-	}
-	return to_return;
-}
-
-/* Returns the same string, except with all spaces stripped in front and at the back of the string. */
-function strip_whitelines(text: string): string {
-	// Define the function that checks for whitelines
-	let is_whiteline = (c: string) => {
-		return c === " " || c === "\r" || c === "\n" || c === "\t";
-	};
-
-	// First, skip all start spaces
-	let start_i = 0;
-	for (; start_i < text.length; start_i++) {
-		if (!is_whiteline(text[start_i])) { break; }
-	}
-	
-	// Skip the end spaces
-	let end_i = text.length - 1;
-	for (; end_i >= 0; end_i--) {
-		if (!is_whiteline(text[end_i])) { break; }
-	}
-
-	// If the end_i is before the start_i, return an empty string (only happens with only spaces)
-	if (start_i > end_i) {
-		return "";
-	}
-
-	// Otherwise, return the appropriate substing
-	return text.substring(start_i, end_i + 1);
-}
-// dd MMM yyyy, HH:mm:ss
-/* Returns whether or not the given file is auto-updated or not. If so, then also returns the position and length of the values of the created date and the last-edited date. */
-function read_file_header(doc: vscode.TextDocument, set: CommentSet, max_lines_to_search: number): [boolean, number, number, number, number, number, number] {
-	// Simply search the first N lines for the line: set.middle + " Auto updated?"
-	// But while at it, also save position of lines: set.middle + " Created:" and set.middle + " Last edited:"
-	let doc_text = doc.getText();
-	let auto_updated = "unknown";
-	let created_line = -1;
-	let created_start = -1;
-	let created_end = -1;
-	let last_edited_line = -1;
-	let last_edited_start = -1;
-	let last_edited_end = -1;
-	for (let l = 0; l < max_lines_to_search; l++) {
-		let raw_line = get_line(doc_text);
-		if (raw_line === undefined) {
-			break;
-		}
-		doc_text = doc_text.substring(raw_line.length + 1);
-
-		// Check if it starts with the middle char and remove it if so
-		if (raw_line.substring(0, set.middle.length) !== set.middle) {
-			continue;
-		}
-		let line = raw_line.substring(set.middle.length);
-
-		// Then, remove all spaces
-		line = strip_whitelines(line);
-
-		// Check if it's one of the lines we want
-		if (auto_updated === "pending") {
-			let lower_line = line.toLowerCase();
-			if (lower_line === "yes" || lower_line === "no") {
-				auto_updated = lower_line;
-			} else {
-				break;
-			}
-		} else if (created_line === l) {
-			// Store the start and end of the relevant line part
-			created_start = set.middle.length + 3;
-			created_end = raw_line.length;
-		} else if (last_edited_line === l) {
-			// Store the start and end of the relevant line part
-			last_edited_start = set.middle.length + 3;
-			last_edited_end = raw_line.length;
-		} else if (line === "Auto updated?") {
-			auto_updated = "pending";
-		} else if (line === "Created:") {
-			// The values can be found at the next line
-			created_line = l + 1;
-		} else if (line === "Last edited:") {
-			// The values can be found at the next line
-			last_edited_line = l + 1;
-		}
-	}
-
-	// If the auto-update is still pending, then tell the user they're missing a bit
-	if (auto_updated === "pending") {
-		vscode.window.showErrorMessage("Unknown auto-update option in header; should be 'yes' or 'no'");
-		return [false, -1, -1, -1, -1, -1, -1];
-	}
-
-	// Return what we have
-	return [auto_updated === "yes", created_line, created_start, created_end, last_edited_line, last_edited_start, last_edited_end];
-}
-
-/* Opens the given document at the given position. */
-function goto_position(doc: vscode.TextDocument, end_pos: vscode.Position): void {
-	let editor_promise = vscode.window.showTextDocument(doc, undefined, false);
-	editor_promise.then((editor) => {
-		// Show the range
-		editor.revealRange(new vscode.Range(new vscode.Position(0, 0), end_pos));
-	});
 }
 
 
@@ -357,40 +522,19 @@ async function prepare_generation() {
 
 /* Given a document and its description, generates a new header at the start of this document with the FileHeaderGenerator's current settings. */
 function generate_header(doc: vscode.TextDocument, description: string): void {
-	// First, get the formatString property
-	let date_format = get_date_format();
+	// Create a new Header with the desired properties
+	let now: DateTime = DateTime.now();
+	let header: Header = new Header(
+		get_header_title(doc),
+		get_author(),
+		now,
+		now,
+		true,
+		description,
+	);
 
-	// Determine the path of the currently opened document
-	let path = doc.uri;
-
-	// Fetch the correct comment characters
-	let set = get_comment_set(doc);
-
-	// Fetch the filename (with extension)
-	let title = get_header_title(doc);
-
-	// Wrap the description if necessary
-	let description_wrapped = wrap_description(description, set.middle + "   ");
-	
-	// Create the full comment text
-	let text = set.start + " " + title + "\n";
-	text += set.middle + "   by " + get_editor() + "\n";
-	text += set.middle + "\n";
-	text += set.middle + " Created:\n";
-	text += set.middle + "   " + get_now(date_format) + "\n";
-	text += set.middle + " Last edited:\n";
-	text += set.middle + "   " + get_now(date_format) + "\n";
-	text += set.middle + " Auto updated?\n";
-	text += set.middle + "   Yes\n";
-	text += set.middle + "\n";
-	text += set.middle + " Description:\n";
-	text += description_wrapped;
-	text += set.end + "\n\n";
-
-	// Create an edit
-	let edit = new vscode.WorkspaceEdit();
-	edit.insert(path, new vscode.Position(0, 0), text);
-	vscode.workspace.applyEdit(edit);
+	// Write it to the document
+	header.insert_top(doc, get_comment_set(doc, get_rust_docstring_enabled()), get_date_format());
 }
 
 
@@ -406,34 +550,35 @@ function update_header(doc: vscode.TextDocument): void {
 		return;
 	}
 
-	// Fetch the comment set
-	let set = get_comment_set(doc);
-	// Fetch the maximum number of lines we'll search
-	let N = get_n_lines();
-	// Fetch the date format
-	let date_format = get_date_format();
+	// Get some settings
+	let rust_docstring: boolean     = get_rust_docstring_enabled();
+	let set: CommentSet             = get_comment_set(doc, rust_docstring);
+	let date_format: string         = get_date_format();
+	let max_lines_to_search: number = get_n_lines();
 
-	// Get the header info
-	let [auto_updated, _, _1, _2, last_edited_line, last_edited_start, last_edited_end] = read_file_header(doc, set, N);
+	// Attempt to read the header
+	let header: Header | null = Header.from_doc(doc, set, date_format, max_lines_to_search);
+	// If it's Rust, see if we need to update
+	if (header === null && doc.languageId === "rust") {
+		// Try again with a CommentSet that is the negative of this one
+		header = Header.from_doc(doc, get_comment_set(doc, !rust_docstring), date_format, max_lines_to_search);
 
-	// Check what we have
-	if (!auto_updated) {
-		// No auto update enabled
-		console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\"");
-		return;
+		// If it's not null, regenerate it with the new comment set
+		if (header !== null) {
+			header.regenerate(doc, set, date_format);
+			console.log("file-header-generator: regenerated Rust header for file: \"" + doc.uri.path + "\""); return;
+		}
+	}
+	// Only continue if auto-updates are enabled
+	if (header === null || !header.auto_updated.value) {
+		console.log("file-header-generator: no auto update enabled for file: \"" + doc.uri.path + "\""); return;
 	}
 
-	// If auto updateing but no last_edited found
-	if (last_edited_line === -1 || last_edited_start === -1 || last_edited_end === -1) {
-		console.log("file-header-generator: we want to auto update, but no 'last updated' header found: this should not happen!")
-		vscode.window.showErrorMessage("Internal error occurred while updating file (see log)");
-		return;
-	}
+	// Update the value and flush that field
+	header.edited.value = DateTime.now();
+	let edit_resolve = header.flush(doc, date_format, [ "edited" ]);
 
-	// Now that everything's correct, update the last edited field
-	let edit = new vscode.WorkspaceEdit();
-	edit.replace(doc.uri, new vscode.Range(new vscode.Position(last_edited_line, last_edited_start), new vscode.Position(last_edited_line, last_edited_end)), get_now(date_format));
-	let edit_resolve = vscode.workspace.applyEdit(edit);
+	// Save the document when the edit has been performed
 	edit_resolve.then(() => {
 		can_update = false;
 		let save_resolve = doc.save();
@@ -442,6 +587,7 @@ function update_header(doc: vscode.TextDocument): void {
 		});
 	});
 
+	// Done, do some funky logging
 	console.log("file-header-generator: update success for file: \"" + doc.uri.path + "\"");
 }
 

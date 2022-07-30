@@ -1,8 +1,9 @@
 {
 	"name": "file-header-generator",
+	"license": "GPLV3",
 	"displayName": "File Header Generator",
 	"description": "Automatically creates (and maintains) file headers for multiple languages.",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"publisher": "Lut99",
 	"repository": {
 		"type": "git",
@@ -48,6 +49,11 @@
 						"type": "string",
 						"default": "<locale>",
 						"description": "The format of dates written by the FileHeaderGenerator. For an overview of the tokens available, refer to the extension's README."
+					},
+					"file-header-generator.rustDocString": {
+						"type": "boolean",
+						"default": true,
+						"description": "Whether or not to use new comments for the Rust language to work better with Rust's build-in docstrings. Note that enabling this will automatically overwrite old style comments on save (and vice versa)."
 					}
 				}
 			}
@@ -67,7 +73,7 @@
 		"@types/node": "^12.11.7",
 		"@types/vscode": "^1.41.0",
 		"glob": "^7.1.5",
-		"mocha": "^9.1.3",
+		"mocha": "^10.0.0",
 		"tslint": "^5.20.0",
 		"typescript": "^3.6.4",
 		"vscode-test": "^1.2.2"

@@ -32,13 +32,14 @@ This extension contributes the following settings:
 * `file-header-generator.dateFormat`: The format of dates written by the FileHeaderGenerator. Is set to the current locale by default (see the list of special tokens below). For an overview of the tokens available, refer to [https://moment.github.io/luxon/#/formatting?id=table-of-tokens](https://moment.github.io/luxon/#/formatting?id=table-of-tokens.). Additionally, there are a few extra values:
     * `<locale>`: Formats according to the standard locale, as reported by the system. Can also use the `FFF` format for this.
     * `<iso>`: Formats according to the standard ISO format.
+* `file-header-generator.rustDocString`: Whether or not to use new comments for the Rust language to work better with Rust's build-in docstrings. Note that enabling this will automatically overwrite old style comments on save (and vice versa).
 
 
 ## Issues
 
 If you encounter any issues, have suggestions or would like something to change, don't hesitate to leave an issue at our [github](https://github.com/Lut99/FileHeaderGenerator/issues)! Please try to use the appropriate tags so I can process them more efficiently.
 
-Also note that I'm mostly making this extension for myself - that means that I might not respond to issues immediately or incorporate them, even if they're super good ideas.
+Also note that I'm mostly making this extension for myself - that means that I might not respond to issues immediately or incorporate them, even if they're super good ideas (but I am definitely willing to listen).
 
 
 ## Release Notes
@@ -72,3 +73,7 @@ Fixed a few vulnerabilities and added support for shellscript (bash etc), Makefi
 ### 1.1.0
 
 Changed the date formatting from local to custom, and added support for Rust files. Also fixed the bug where the auto-update wouldn't work on Windows.
+
+### 1.2.0
+
+Added docstring-aware style for Rust and an appropriate setting for that. Also revamped backend parsing algorithm.
