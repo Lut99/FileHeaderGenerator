@@ -4,7 +4,7 @@
  * Created:
  *   15 Jan 2020, 16:29:13
  * Last edited:
- *   30 Jul 2022, 17:43:47
+ *   21 Jan 2023, 10:41:27
  * Auto updated?
  *   Yes
  *
@@ -368,10 +368,21 @@ function get_date_format(): string {
 	return data;
 }
 
-/* Function that returns the rust docstring-enabled setting from VSCode's settings. */
-function get_rust_docstring_enabled(): boolean {
+/* Function that returns any custom ID -> CommentSet mappings. */
+function get_custom_languages(): { [key: string]: [string] } {
+	// Get the string value
 	let config = vscode.workspace.getConfiguration();
-	let data = config.get<boolean>("file-header-generator.rustDocString");
+	let data = config.get<{ [key: string]: [string] }>("file-header-generator.customLanguages");
+	if (data === undefined) {
+		return {};
+	}
+	return data;
+}
+
+/* Function that returns the rust docstring-enabled setting from VSCode's settings. */
+function get_docstring_enabled(): boolean {
+	let config = vscode.workspace.getConfiguration();
+	let data = config.get<boolean>("file-header-generator.docString");
 	if (data === undefined) {
 		return true;
 	}
@@ -438,11 +449,11 @@ function get_header_title(doc: vscode.TextDocument): string {
 }
 
 /* Given the document, returns the appropriate CommentSet instance with the comments used for the document's defined language. */
-function get_comment_set(doc: vscode.TextDocument, rust_docstring: boolean): CommentSet {
+function get_comment_set(doc: vscode.TextDocument, docstring: boolean, custom_languages: { [key: string]: [string] }): CommentSet {
 	let id = doc.languageId;
 
 	// Use that for the comment character
-	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl" || (!rust_docstring && id === "rust")) {
+	if (id === "c" || id === "cpp" || id === "csharp" || id === "java" || id === "typescript" || id === "javascript" || id === "cuda" || id === "css" || id === "php" || id === "glsl") {
 		return new CommentSet("/*", " *", "**/");
 	} else if (id === "python" || id === "shellscript" || id === "makefile" || id === "cmake") {
 		return new CommentSet("#", "#", "#");
@@ -450,8 +461,26 @@ function get_comment_set(doc: vscode.TextDocument, rust_docstring: boolean): Com
 		return new CommentSet("--[[", "    ", "--]]");
 	} else if (id === "html") {
 		return new CommentSet("<!--", "    ", "-->");
-	} else if (rust_docstring && id === "rust") {
+	} else if ((docstring && id === "rust") || (docstring && id == "wgsl")) {
 		return new CommentSet("// ", "// ", "// ", "//!");
+	} else if ((!docstring && id === "rust") || (!docstring && id === "wgsl") || id === "eflint") {
+		return new CommentSet("//", "//", "//");
+	} else if (custom_languages.hasOwnProperty(id)) {
+		// Assert the result has the correct type
+		let val: any = custom_languages[id];
+		if (typeof val !== "object") { vscode.window.showWarningMessage("Comment set for language '" + id + "' is invalid: not a list"); return new CommentSet("", "", ""); }
+		let list: { [key: number]: string } = val;
+		if (typeof list[0] !== "string") { vscode.window.showWarningMessage("Comment set for language '" + id + "' is invalid: start comment is not a string"); return new CommentSet("", "", ""); }
+		if (typeof list[1] !== "string") { vscode.window.showWarningMessage("Comment set for language '" + id + "' is invalid: middle comment is not a string"); return new CommentSet("", "", ""); }
+		if (typeof list[2] !== "string") { vscode.window.showWarningMessage("Comment set for language '" + id + "' is invalid: end comment is not a string"); return new CommentSet("", "", ""); }
+		if (list[3] !== undefined && typeof list[3] !== "string") { vscode.window.showWarningMessage("Comment set for language '" + id + "' is invalid: doc comment is not a string"); return new CommentSet("", "", ""); }
+
+		// Return the values as a comment set
+		if (!docstring || list[3] === undefined) {
+			return new CommentSet(list[0], list[1], list[2]);
+		} else {
+			return new CommentSet(list[0], list[1], list[2], list[3]);
+		}
 	} else {
 		return new CommentSet("", "", "");
 	}
@@ -534,7 +563,7 @@ function generate_header(doc: vscode.TextDocument, description: string): void {
 	);
 
 	// Write it to the document
-	header.insert_top(doc, get_comment_set(doc, get_rust_docstring_enabled()), get_date_format());
+	header.insert_top(doc, get_comment_set(doc, get_docstring_enabled(), get_custom_languages()), get_date_format());
 }
 
 
@@ -551,22 +580,23 @@ function update_header(doc: vscode.TextDocument): void {
 	}
 
 	// Get some settings
-	let rust_docstring: boolean     = get_rust_docstring_enabled();
-	let set: CommentSet             = get_comment_set(doc, rust_docstring);
-	let date_format: string         = get_date_format();
-	let max_lines_to_search: number = get_n_lines();
+	let docstring: boolean                            = get_docstring_enabled();
+	let custom_languages: { [key: string]: [string] } = get_custom_languages();
+	let set: CommentSet                               = get_comment_set(doc, docstring, custom_languages);
+	let date_format: string                           = get_date_format();
+	let max_lines_to_search: number                   = get_n_lines();
 
 	// Attempt to read the header
 	let header: Header | null = Header.from_doc(doc, set, date_format, max_lines_to_search);
-	// If it's Rust, see if we need to update
-	if (header === null && doc.languageId === "rust") {
+	// We might need to try again without docstring to update
+	if (header === null) {
 		// Try again with a CommentSet that is the negative of this one
-		header = Header.from_doc(doc, get_comment_set(doc, !rust_docstring), date_format, max_lines_to_search);
+		header = Header.from_doc(doc, get_comment_set(doc, !docstring, custom_languages), date_format, max_lines_to_search);
 
 		// If it's not null, regenerate it with the new comment set
 		if (header !== null) {
 			header.regenerate(doc, set, date_format);
-			console.log("file-header-generator: regenerated Rust header for file: \"" + doc.uri.path + "\""); return;
+			console.log("file-header-generator: regenerated header for file: \"" + doc.uri.path + "\""); return;
 		}
 	}
 	// Only continue if auto-updates are enabled
